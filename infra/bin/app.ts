@@ -5,7 +5,7 @@ import { MediaStack } from '../lib/media-stack.js'
 const app = new App()
 const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: process.env.CDK_DEFAULT_REGION ?? 'us-east-1',
+  region: process.env.CDK_DEFAULT_REGION ?? 'us-west-2',
 }
 
 const core = new CoreStack(app, 'AssortmentCore', { env })

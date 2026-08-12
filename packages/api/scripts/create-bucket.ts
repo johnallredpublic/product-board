@@ -12,7 +12,7 @@ import {
 const BUCKET = process.env.BUCKET_NAME ?? 'assortment-assets'
 const s3 = new S3Client({
   endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
-  region: 'us-east-1',
+  region: 'us-west-2',
   forcePathStyle: true,
   credentials: { accessKeyId: 'minioadmin', secretAccessKey: 'minioadmin' },
 })

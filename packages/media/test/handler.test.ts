@@ -22,7 +22,7 @@ const dynamo = new DynamoDBClient({
   credentials: { accessKeyId: 'x', secretAccessKey: 'x' },
 })
 const s3 = new S3Client({
-  endpoint: 'http://localhost:9000', region: 'us-east-1', forcePathStyle: true,
+  endpoint: 'http://localhost:9000', region: 'us-west-2', forcePathStyle: true,
   credentials: { accessKeyId: 'minioadmin', secretAccessKey: 'minioadmin' },
 })
 

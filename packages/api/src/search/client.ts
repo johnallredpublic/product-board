@@ -29,7 +29,7 @@ function os(): Client {
     _client = new Client({
       node: ENDPOINT,
       ...AwsSigv4Signer({
-        region: process.env.AWS_REGION ?? 'us-east-1',
+        region: process.env.AWS_REGION ?? 'us-west-2',
         service: 'es', // managed OpenSearch Service domain
         getCredentials: () => defaultProvider()(),
       }),

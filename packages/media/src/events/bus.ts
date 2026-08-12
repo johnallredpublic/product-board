@@ -9,7 +9,7 @@ const client = new EventBridgeClient({
   ...(process.env.LOCAL
     ? {
         endpoint: process.env.EVENTBRIDGE_ENDPOINT ?? 'http://localhost:4566',
-        region: 'us-east-1',
+        region: 'us-west-2',
         credentials: { accessKeyId: 'x', secretAccessKey: 'x' },
       }
     : {}),
