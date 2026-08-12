@@ -3,6 +3,9 @@ packages:
   - 'infra'
 allowBuilds:
   '@parcel/watcher': true
+  cpu-features: true
   esbuild: true
   lmdb: true
   msgpackr-extract: true
+  protobufjs: true
+  ssh2: true

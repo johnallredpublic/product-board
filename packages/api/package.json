@@ -6,9 +6,25 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:create": "tsx scripts/create-table.ts",
+    "db:reset": "tsx scripts/create-table.ts --recreate",
+    "bench": "LOCAL=1 tsx scripts/benchmark.ts"
   },
   "dependencies": {
-    "@assortment/shared": "workspace:*"
+    "@assortment/shared": "workspace:*",
+    "@aws-sdk/client-dynamodb": "^3.1107.0",
+    "@aws-sdk/client-s3": "^3.1107.0",
+    "@aws-sdk/lib-dynamodb": "^3.1107.0",
+    "@aws-sdk/s3-request-presigner": "^3.1107.0",
+    "@fastify/cors": "^11.3.0",
+    "fastify": "^5.11.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@testcontainers/localstack": "^12.1.0",
+    "tsx": "^4.23.12",
+    "typescript": "~5.9.2",
+    "vitest": "^4.1.10"
   }
 }

@@ -10,7 +10,7 @@
     "test": "pnpm --filter './packages/*' test"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "typescript": "~5.9.2",
     "@types/node": "^22.10.0"
   }
 }
