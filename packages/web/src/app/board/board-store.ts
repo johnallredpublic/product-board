@@ -58,4 +58,18 @@ export class BoardStore {
   select(ids: ReadonlySet<string>) {
     this._selection.set(ids)
   }
+
+  /** Bump versions after a successful save, so the next write isn't stale. */
+  bumpVersions(ids: Iterable<string>) {
+    const set = new Set(ids)
+    this._placements.update(ps =>
+      ps.map(p => (set.has(p.id) ? { ...p, version: p.version + 1 } : p)),
+    )
+  }
+
+  /** Re-fetch from the server (e.g. after a conflict); discards local edits. */
+  async reload() {
+    const id = this.boardId()
+    if (id) await this.load(id)
+  }
 }

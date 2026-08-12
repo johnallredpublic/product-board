@@ -4,6 +4,7 @@ import {
 } from '@angular/core'
 import { DecimalPipe } from '@angular/common'
 import { BoardStore, type Renderable } from './board-store'
+import { PersistService } from './persist.service'
 import { type Viewport, worldToScreen, screenToWorld, clamp } from './viewport'
 import { roundRect, clip } from './render-utils'
 
@@ -48,6 +49,7 @@ type Drag =
 })
 export class BoardCanvasComponent implements AfterViewInit, OnDestroy {
   protected store = inject(BoardStore)
+  private persist = inject(PersistService)
   private canvasRef = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas')
   private ctx!: CanvasRenderingContext2D
   private ro?: ResizeObserver
@@ -285,8 +287,10 @@ export class BoardCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   onPointerUp(_e: PointerEvent) {
-    // Persistence (debounced save on release) is wired in Phase 7.
+    const mode = this.drag?.mode
     this.drag = null
+    // Save on release: persist the moved selection immediately.
+    if (mode === 'move') void this.persist.flush(this.store.selection())
     this.requestRender()
   }
 
@@ -326,6 +330,6 @@ export class BoardCanvasComponent implements AfterViewInit, OnDestroy {
     if (!d) return
     e.preventDefault()
     this.store.moveBy(new Set([r.id]), d[0], d[1])
-    // Persistence is wired in Phase 7.
+    this.persist.schedule(new Set([r.id])) // debounced save for keyboard nudges
   }
 }
