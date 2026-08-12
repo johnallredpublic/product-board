@@ -3,9 +3,10 @@ import cors from '@fastify/cors'
 import { ZodError } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { BoardView, MovePlacements } from '@assortment/shared'
+import { BoardView, MovePlacements, UploadRequest } from '@assortment/shared'
 import { getBoardView, placementSkMap } from './db/boards.js'
 import { movePlacements, type Move } from './routes/placements.js'
+import { createAssetUpload } from './routes/assets.js'
 import { ConflictError } from './errors.js'
 
 /** Flatten a ZodError into a single human-readable line for the error body. */
@@ -81,6 +82,12 @@ export function buildServer() {
     // A ConflictError here bubbles to the central error handler -> 409.
     await movePlacements(boardId, moves)
     return { ok: true }
+  })
+
+  app.post<{ Params: { id: string } }>('/api/products/:id/assets', async (req) => {
+    // UploadRequest's content-type enum is the allow-list; a bad type -> 400.
+    const { contentType } = UploadRequest.parse(req.body)
+    return createAssetUpload(req.params.id, contentType)
   })
 
   return app

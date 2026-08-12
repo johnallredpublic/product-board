@@ -36,6 +36,8 @@ Run these from `packages/api` (or from the repo root with
 |---|---|
 | `pnpm db:create` | Create the `assortment` table on DynamoDB Local (PK/SK + overloaded GSI1). Idempotent — skips if it already exists. |
 | `pnpm db:reset` | Drop and recreate the table (`--recreate`). Use after changing the key schema. |
+| `pnpm s3:create` | Create the `assortment-assets` bucket on MinIO. Idempotent. |
+| `pnpm sweep:assets` | Delete abandoned `pending` asset records (>24h old, no uploaded object). Runs nightly in prod. |
 | `LOCAL=1 pnpm dev` | Start the API with hot reload (`tsx watch`) on `:3000` (override with `PORT`). |
 | `pnpm bench` | **Phase 3 checkpoint** — seed a board and time `GET /api/boards/:id`. |
 | `pnpm typecheck` | `tsc --noEmit` over `src` + `scripts` (via [`tsconfig.json`](tsconfig.json)). |
@@ -47,6 +49,7 @@ Run these from `packages/api` (or from the repo root with
 # from repo root
 docker compose up -d
 pnpm --filter @assortment/api db:create
+pnpm --filter @assortment/api s3:create
 LOCAL=1 pnpm --filter @assortment/api dev      # API now on http://localhost:3000
 ```
 

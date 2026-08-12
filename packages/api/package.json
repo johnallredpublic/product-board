@@ -9,6 +9,8 @@
     "test": "vitest run",
     "db:create": "tsx scripts/create-table.ts",
     "db:reset": "tsx scripts/create-table.ts --recreate",
+    "s3:create": "tsx scripts/create-bucket.ts",
+    "sweep:assets": "LOCAL=1 tsx scripts/sweep-assets.ts",
     "bench": "LOCAL=1 tsx scripts/benchmark.ts"
   },
   "dependencies": {
@@ -19,10 +21,12 @@
     "@aws-sdk/s3-request-presigner": "^3.1107.0",
     "@fastify/cors": "^11.3.0",
     "fastify": "^5.11.3",
+    "sharp": "^0.35.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@testcontainers/localstack": "^12.1.0",
+    "@types/aws-lambda": "^8.10.162",
     "tsx": "^4.23.12",
     "typescript": "~5.9.2",
     "vitest": "^4.1.10"

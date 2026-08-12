@@ -64,3 +64,17 @@ export const ApiError = z.object({
     message: z.string(),
   }),
 })
+
+/** Body for requesting a presigned upload. The enum is the allow-list: an
+ * unsupported type fails validation at the boundary (400) with no extra check. */
+export const UploadRequest = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+})
+export type UploadRequest = z.infer<typeof UploadRequest>
+
+/** What the upload endpoint returns: an id to track, and a URL to PUT bytes to. */
+export const UploadResponse = z.object({
+  assetId: z.string().uuid(),
+  uploadUrl: z.string().url(),
+})
+export type UploadResponse = z.infer<typeof UploadResponse>
