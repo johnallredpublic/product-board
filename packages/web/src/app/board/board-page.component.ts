@@ -1,33 +1,42 @@
 import { Component, inject, input, effect } from '@angular/core'
-import { DecimalPipe } from '@angular/common'
+import { RouterLink } from '@angular/router'
 import { BoardStore } from './board-store'
+import { BoardCanvasComponent } from './board-canvas.component'
 
-/**
- * Temporary text view proving the store loads real data and `renderables` joins
- * placements with products. Phase 6 replaces the <ul> with the canvas.
- */
 @Component({
   selector: 'app-board-page',
-  imports: [DecimalPipe],
+  imports: [RouterLink, BoardCanvasComponent],
   template: `
     @if (store.loading()) {
-      <p>Loading…</p>
+      <p class="status">Loading…</p>
     } @else if (store.board(); as board) {
-      <h1>{{ board.name }} <small>({{ board.season }})</small></h1>
-      <p>{{ store.renderables().length }} placements · {{ store.selectedCount() }} selected</p>
-      <ul>
-        @for (r of store.renderables(); track r.id) {
-          <li>
-            {{ r.product?.name ?? '(unknown product)' }}
-            — ({{ r.x | number: '1.0-0' }}, {{ r.y | number: '1.0-0' }})
-          </li>
-        }
-      </ul>
-      <p><em>Canvas rendering arrives in Phase 6.</em></p>
+      <header class="bar">
+        <a routerLink="/boards">← Boards</a>
+        <strong>{{ board.name }}</strong>
+        <span class="muted">({{ board.season }})</span>
+        <span class="spacer"></span>
+        <span class="muted">
+          {{ store.renderables().length }} items · {{ store.selectedCount() }} selected
+        </span>
+      </header>
+      <app-board-canvas class="canvas" />
     } @else {
-      <p>Board not found.</p>
+      <p class="status">Board not found.</p>
     }
   `,
+  styles: [`
+    :host { display: flex; flex-direction: column; height: 100vh; }
+    .bar {
+      display: flex; align-items: center; gap: .6rem;
+      padding: .5rem .8rem; border-bottom: 1px solid #e5e7eb;
+      font: 14px system-ui, sans-serif;
+    }
+    .bar a { text-decoration: none; }
+    .bar .spacer { flex: 1; }
+    .muted { color: #6b7280; }
+    .canvas { flex: 1; min-height: 0; }
+    .status { padding: 1rem; font: 14px system-ui, sans-serif; }
+  `],
 })
 export class BoardPageComponent {
   protected store = inject(BoardStore)
@@ -36,7 +45,6 @@ export class BoardPageComponent {
   boardId = input.required<string>()
 
   constructor() {
-    // Reading the input signal inside an effect re-loads whenever it changes.
     effect(() => {
       const id = this.boardId()
       if (id) void this.store.load(id)
