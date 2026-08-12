@@ -6,17 +6,18 @@
 // The whole discipline: keys follow from patterns. Every pattern below resolves
 // to a single GetItem, Query, or BatchGet — no scans.
 //
-//   1. Board metadata             Query  PK=BOARD#<id>,  SK=#META
-//   2. Boards in a workspace      Query  PK=WS#<id>,     SK begins_with BOARD#
-//   3. Placements in z-order      Query  PK=BOARD#<id>,  SK begins_with ITEM#
+//   (board keys are tenant-scoped — TENANT#<t>#BOARD#<id> — since ADR 0020)
+//   1. Board metadata             Query  PK=TENANT#<t>#BOARD#<id>,  SK=#META
+//   2. Boards in a workspace      Query  PK=WS#<tenantId>,          SK begins_with BOARD#
+//   3. Placements in z-order      Query  PK=TENANT#<t>#BOARD#<id>,  SK begins_with ITEM#
 //   4. Products by a set of IDs   BatchGet  PK=PROD#<id>, SK=#META  (≤100/req)
 //   5. Boards containing product  Query  GSI1 PK=PROD#<pid>
 //   6. Product + its assets       Query  PK=PROD#<id>    (#META + ASSET# items)
-//   7. Recent activity on a board Query  PK=BOARD#<id>#EVT, ScanIndexForward=false
+//   7. Recent activity on a board Query  PK=TENANT#<t>#BOARD#<id>#EVT, ScanIndexForward=false
 //
-// Patterns 1 + 3 share partition BOARD#<id>: `#META` (0x23) sorts before `ITEM#`,
+// Patterns 1 + 3 share the board partition: `#META` (0x23) sorts before `ITEM#`,
 // so one query returns the board and everything on it — the item collection is a
-// pre-computed join. Change events live in their OWN partition (BOARD#<id>#EVT)
+// pre-computed join. Change events live in their OWN partition (…#BOARD#<id>#EVT)
 // so they can grow unbounded without creating a hot partition on the board.
 //
 // ─── Item shapes ───────────────────────────────────────────────────────────

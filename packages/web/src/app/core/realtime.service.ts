@@ -14,6 +14,9 @@ export class RealtimeService {
   private boardId = ''
   private closed = false
   private reconnected = false
+  private static readonly BASE_BACKOFF = 1000
+  private static readonly MAX_BACKOFF = 30_000
+  private backoff = RealtimeService.BASE_BACKOFF
 
   connect(boardId: string) {
     this.boardId = boardId
@@ -32,6 +35,7 @@ export class RealtimeService {
     this.ws = ws
 
     ws.onopen = () => {
+      this.backoff = RealtimeService.BASE_BACKOFF // connected — reset the retry delay
       ws.send(JSON.stringify({ type: 'subscribe', boardId: this.boardId }))
       if (this.reconnected) {
         this.reconnected = false
@@ -56,7 +60,11 @@ export class RealtimeService {
     ws.onclose = () => {
       if (this.closed) return
       this.reconnected = true
-      setTimeout(() => this.open(), 1000)
+      // Exponential backoff (capped) so an unavailable server — e.g. before the prod
+      // WebSocket API exists — doesn't retry every second forever.
+      const delay = this.backoff
+      this.backoff = Math.min(this.backoff * 2, RealtimeService.MAX_BACKOFF)
+      setTimeout(() => this.open(), delay)
     }
     ws.onerror = () => ws.close()
   }

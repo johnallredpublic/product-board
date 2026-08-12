@@ -1,6 +1,8 @@
 import { GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import type { Product, UpdateProduct } from '@assortment/shared'
+import type { AssetRef, Product, UpdateProduct } from '@assortment/shared'
 import { ddb, TABLE } from './table.js'
+import { signAssetGet } from '../s3/client.js'
+import type { StoredAsset } from '../handlers/on-asset-processed.js'
 
 type Item = Record<string, any>
 
@@ -48,8 +50,21 @@ export async function updateProduct(
   return Attributes!
 }
 
-/** Raw product #META item → the Product contract shape. */
-export function toProductContract(i: Item): Product {
+/**
+ * Turn a STORED asset (derivative keys) into an AssetRef with freshly presigned,
+ * short-lived GET URLs (§6.5). Null when the product has no processed asset yet.
+ */
+export async function signAsset(stored: StoredAsset | null | undefined): Promise<AssetRef | null> {
+  if (!stored?.key128 || !stored?.key512) return null
+  const [thumb128, thumb512] = await Promise.all([
+    signAssetGet(stored.key128),
+    signAssetGet(stored.key512),
+  ])
+  return { assetId: stored.assetId, thumb128, thumb512, width: stored.width, height: stored.height }
+}
+
+/** Raw product #META item → the Product contract, with its asset presigned for read. */
+export async function signedProduct(i: Item): Promise<Product> {
   return {
     id: String(i.PK).replace('PROD#', ''),
     style: i.style,
@@ -57,7 +72,7 @@ export function toProductContract(i: Item): Product {
     colorway: i.colorway,
     priceCents: i.priceCents,
     season: i.season,
-    asset: i.asset ?? null,
+    asset: await signAsset(i.asset),
   }
 }
 

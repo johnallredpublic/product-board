@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { AssetRef, type AssetProcessed } from '@assortment/shared'
 import { ddb, TABLE } from '../src/db/table.js'
 import { applyAssetProcessed } from '../src/handlers/on-asset-processed.js'
+import { signedProduct } from '../src/db/products.js'
 
 // The API's side of the media boundary: applying media's AssetProcessed event to
 // the product record (which the API owns). Requires DynamoDB Local.
@@ -48,7 +49,7 @@ beforeAll(async () => {
 })
 
 describe('applyAssetProcessed', () => {
-  it('sets a valid AssetRef on the product from the event', async () => {
+  it('stores derivative KEYS on the product (not baked URLs)', async () => {
     const evt: AssetProcessed = {
       version: 1, assetId, productId, width: 300, height: 200,
       derivatives: [
@@ -62,9 +63,28 @@ describe('applyAssetProcessed', () => {
       TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: '#META' },
     }))).Item
 
-    expect(AssetRef.safeParse(product?.asset).success).toBe(true)
+    // Stored shape is keys — never a public URL (the bucket is private).
     expect(product?.asset.assetId).toBe(assetId)
     expect(product?.asset.width).toBe(300)
-    expect(product?.asset.thumb128).toContain('thumb-128.webp')
+    expect(product?.asset.key128).toContain('thumb-128.webp')
+    expect(product?.asset.thumb128).toBeUndefined()
+  })
+
+  it('signedProduct presigns the stored keys into a valid AssetRef', async () => {
+    const product = (await ddb.send(new GetCommand({
+      TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: '#META' },
+    }))).Item
+
+    const signed = await signedProduct(product!)
+    expect(AssetRef.safeParse(signed.asset).success).toBe(true)
+    // Short-lived presigned GET URLs — carry the key and a signature, not a plain path.
+    expect(signed.asset!.thumb128).toContain('thumb-128.webp')
+    expect(signed.asset!.thumb128).toContain('X-Amz-Signature')
+    expect(signed.asset!.thumb512).toContain('thumb-512.webp')
+  })
+
+  it('signedProduct yields a null asset for a product without one', async () => {
+    const signed = await signedProduct({ PK: `PROD#${randomUUID()}`, style: 'S', name: 'N', colorway: 'C', priceCents: 1, season: 'FA26' })
+    expect(signed.asset).toBeNull()
   })
 })

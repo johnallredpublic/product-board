@@ -3,9 +3,10 @@ import { ddb, TABLE } from './table.js'
 import { boardPk, boardShardPk } from './keys.js'
 
 // Opt-in write-sharding for a hot board (ADR 0018 / DESIGN.md §6.3). A single board
-// partition (BOARD#<id>) caps out around a partition's write throughput; a viral
-// board spreads its placements across N shard partitions (BOARD#<id>#S<n>), chosen
-// by a stable hash of the placement id, with reads scatter-gathering across shards.
+// partition (TENANT#<t>#BOARD#<id>) caps out around a partition's write throughput; a
+// viral board spreads its placements across N shard partitions
+// (TENANT#<t>#BOARD#<id>#S<n>), chosen by a stable hash of the placement id, with
+// reads scatter-gathering across shards. Keys are built in db/keys.ts (ADR 0020).
 //
 // Sharding is OPT-IN per board (shardCount on #META). The default, shardCount<=1, is
 // byte-identical to the unsharded layout — normal boards pay nothing. Apply it to a

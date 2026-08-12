@@ -89,3 +89,10 @@ rationale after the fact.
 | [0012](0012-single-service-split-media.md) | Split media processing, keep everything else together | Accepted |
 | [0013](0013-async-only-between-services.md) | Asynchronous communication only between services | Accepted |
 | [0014](0014-idempotent-consumers.md) | Idempotent consumers via deterministic IDs | Accepted |
+| [0015](0015-auth-and-tenancy.md) | Authentication and multi-tenancy | Accepted; superseded in part by 0020 |
+| [0016](0016-realtime-collaboration.md) | Real-time collaboration over WebSocket | Accepted |
+| [0017](0017-catalog-search.md) | Catalog search via OpenSearch fed by Streams | Accepted |
+| [0018](0018-hot-tenant-handling.md) | Hot-tenant handling (bulkheads + write-sharding) | Accepted |
+| [0019](0019-placement-lifecycle-and-product-editing.md) | Placement lifecycle and product editing | Accepted |
+| [0020](0020-auth-verification-and-tenant-keys.md) | JWT signature verification and tenant-in-partition-key | Accepted |
+| [0021](0021-asset-delivery-and-canary-deploys.md) | Private asset delivery and canary deploys | Accepted |

@@ -14,6 +14,7 @@ import {
   aws_apigatewayv2 as apigwv2,
   aws_logs as logs,
   aws_opensearchservice as opensearch,
+  aws_codedeploy as codedeploy,
 } from 'aws-cdk-lib'
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import { Construct } from 'constructs'
@@ -103,17 +104,45 @@ export class CoreStack extends Stack {
     // ─── API: Fastify on Lambda behind an HTTP API ────────────────────────────
     const apiFn = nodeFn('ApiFn', 'api', { timeout: Duration.seconds(29) })
     // Auth verifies bearer tokens against the IdP's JWKS (ADR 0020). Pass the IdP
-    // config through when set; without JWKS_URI the API fails closed in prod.
-    for (const k of ['JWKS_URI', 'JWT_ISSUER', 'JWT_AUDIENCE'] as const) {
+    // config through when set; without JWKS_URI the API fails closed in prod. Deploying
+    // with AUTH_MODE=dev instead disables auth entirely (single shared dev-tenant) — a
+    // throwaway-demo escape hatch, never for anything real (README "Deploy to AWS").
+    for (const k of ['JWKS_URI', 'JWT_ISSUER', 'JWT_AUDIENCE', 'AUTH_MODE'] as const) {
       if (process.env[k]) apiFn.addEnvironment(k, process.env[k]!)
     }
     this.table.grantReadWriteData(apiFn)
     this.bus.grantPutEventsTo(apiFn)
-    this.assetsBucket.grantPut(apiFn) // presigned PUTs
+    this.assetsBucket.grantPut(apiFn)      // presigned PUTs (uploads)
+    this.assetsBucket.grantRead(apiFn)     // presigned GETs (derivative delivery, §6.5)
     search?.grantRead(apiFn) // catalog search (absent when search is disabled)
 
+    // ─── Gradual (canary) deploys with automatic rollback (DESIGN.md §8) ───────
+    // The HTTP API points at an ALIAS, not the raw function. CodeDeploy shifts 10%
+    // of traffic to a new version for 5 min while watching an errors alarm; if it
+    // breaches, traffic rolls back to the previous version automatically. A bad API
+    // deploy is contained to a small slice for a few minutes instead of everyone.
+    const apiAlias = new lambda.Alias(this, 'ApiAlias', {
+      aliasName: 'live',
+      version: apiFn.currentVersion,
+    })
+
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
-      defaultIntegration: new HttpLambdaIntegration('ApiIntegration', apiFn),
+      defaultIntegration: new HttpLambdaIntegration('ApiIntegration', apiAlias),
+    })
+
+    const apiCanaryErrors = new cw.Alarm(this, 'ApiCanaryErrors', {
+      alarmDescription: 'API Lambda errors during/after a deploy — trips canary rollback',
+      metric: apiAlias.metricErrors({ period: Duration.minutes(1) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cw.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cw.TreatMissingData.NOT_BREACHING,
+    })
+    new codedeploy.LambdaDeploymentGroup(this, 'ApiDeployment', {
+      alias: apiAlias,
+      deploymentConfig: codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+      alarms: [apiCanaryErrors],
+      autoRollback: { failedDeployment: true, deploymentInAlarm: true, stoppedDeployment: true },
     })
 
     // ─── Stream consumer + event source mapping + DLQ ─────────────────────────
@@ -184,16 +213,20 @@ export class CoreStack extends Stack {
       autoDeleteObjects: true,
     })
     const apiDomain = Fn.select(1, Fn.split('://', httpApi.apiEndpoint)) // strip https://
+    // Origin shield (DESIGN.md §6.5): a designated caching layer in front of each
+    // origin that collapses cache-fill requests, so a cold/viral edge doesn't stampede
+    // S3 / the API. Pin it to the stack's region (where the origins live).
+    const originShieldRegion = this.region
     const cdn = new cloudfront.Distribution(this, 'Cdn', {
       defaultRootObject: 'index.html',
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(site),
+        origin: origins.S3BucketOrigin.withOriginAccessControl(site, { originShieldEnabled: true, originShieldRegion }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
       additionalBehaviors: {
         // Same-origin API: no CORS, first-party cookies.
         '/api/*': {
-          origin: new origins.HttpOrigin(apiDomain),
+          origin: new origins.HttpOrigin(apiDomain, { originShieldEnabled: true, originShieldRegion }),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,

@@ -1,11 +1,25 @@
 # Assortment at scale — system design
 
 **Scope.** This describes a version of Assortment serving **500 tenants and 10,000
-concurrent users** — a system we are deliberately *not* building yet. What exists
-today (single-region, single-table DynamoDB, a Fastify API, a media service split
-off over EventBridge, a canvas client) is the starting point; this document is
+concurrent users** — a system we are deliberately *not* building yet. What existed at
+the first draft (single-region, single-table DynamoDB, a Fastify API, a media service
+split off over EventBridge, a canvas client) was the starting point; this document is
 where it goes when the load justifies it. Every significant choice names its
 tradeoff, and the last section says what I would deliberately defer.
+
+> **Implementation status (2026-08-12).** This is still a forward-looking design, but
+> much of it is now built at single-region / dev scale. **Implemented:** the API
+> surface in §3 (including add/remove placement and product edit); tenant-in-partition
+> -key, a central key-builder, and JWKS signature verification (§5); field-level
+> product merge (§6.2); reserved-concurrency bulkheads and opt-in write-sharding
+> (§6.3); OpenSearch search with a DynamoDB off-switch (§6.4); immutable keys, origin
+> shield, and private presigned delivery (§6.5); canary deploys with alarm rollback,
+> reconciliation, and correlation IDs (§7–§8). Real-time (§6.1) works locally via
+> in-process broadcast. **Still target-only:** the API Gateway WebSocket tier +
+> DynamoDB connection registry + fan-out Lambda (§4/§6.1), IAM `LeadingKeys` and
+> tenant-prefixed *products* (§5), per-tenant-tier queues (§6.3), a web client token
+> flow for a real IdP, and every §9 deferral. See the README's "Done / Still open" and
+> `docs/adr/` for detail.
 
 ---
 
@@ -61,15 +75,18 @@ tradeoff, and the last section says what I would deliberately defer.
 REST for request/response, WebSocket for live updates.
 
 ```
-GET   /api/boards                      → boards in the caller's tenant
-POST  /api/boards                      → create board
-GET   /api/boards/:id                  → BoardView (board + placements + products), one round trip
-PATCH /api/boards/:id/placements       → batched moves, optimistic-locked (409 on conflict)
-GET   /api/boards/:id/events           → activity feed (newest first)
-POST  /api/products/:id/assets         → presigned upload URL (bytes go browser→S3)
-GET   /api/catalog?filter=...          → search/filter (OpenSearch-backed)
+GET    /api/boards                      → boards in the caller's tenant
+POST   /api/boards                      → create board
+GET    /api/boards/:id                  → BoardView (board + placements + products), one round trip
+POST   /api/boards/:id/placements       → add a product to the board
+PATCH  /api/boards/:id/placements       → batched moves, optimistic-locked (409 on conflict)
+DELETE /api/boards/:id/placements/:pid  → remove a placement
+GET    /api/boards/:id/events           → activity feed (newest first)
+POST   /api/products/:id/assets         → presigned upload URL (bytes go browser→S3)
+PATCH  /api/products/:id                → edit a product (field-level merge)
+GET    /api/catalog?filter=...          → search/filter (OpenSearch, or a DynamoDB scan when off)
 
-WS    /realtime  (subscribe boardId)   → { PlacementMoved, PlacementAdded, ... }
+WS     /realtime  (subscribe boardId)   → { PlacementMoved, PlacementAdded, PlacementRemoved }
 ```
 
 Contracts are **Zod schemas in a shared package**, versioned; consumers are
@@ -106,7 +123,8 @@ the board renders placeholders until derivatives land.
 ## 5. Multi-tenancy
 
 **Pooled, not siloed.** One table, tenant encoded in the partition key
-(`TENANT#<t>#BOARD#<id>`, extending today's keys). A table (or stack) *per tenant*
+(`TENANT#<t>#BOARD#<id>` — now implemented for the board aggregate via a central
+key-builder; products remain `PROD#<id>` for now). A table (or stack) *per tenant*
 is rejected at 500 tenants: it multiplies operational surface, capacity planning,
 and deploy risk by tenant count for no isolation benefit a scoped key can't give.
 

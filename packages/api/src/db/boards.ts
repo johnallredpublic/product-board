@@ -1,10 +1,11 @@
 import { QueryCommand, BatchGetCommand, TransactWriteCommand, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
 import type { AddPlacement, Board, ChangeEvent } from '@assortment/shared'
-import type { Placement, Product } from '@assortment/shared'
+import type { Placement } from '@assortment/shared'
 import { ddb, TABLE } from './table.js'
 import { shardCountOf, queryPlacementItems, placementPk } from './sharding.js'
 import { boardPk, boardEventsPk, workspacePk, productPk, parseBoardPk } from './keys.js'
+import { signedProduct } from './products.js'
 
 /** A raw DynamoDB item: generic keys (PK/SK/GSI…) plus domain attributes. */
 type Item = Record<string, any>
@@ -114,26 +115,28 @@ export async function getBoardView(boardId: string, tenantId: string) {
     ? Items.filter(i => String(i.SK).startsWith('ITEM#'))
     : await queryPlacementItems(tenantId, boardId, shardCount)
 
-  // Hydrate products. BatchGet caps at 100 keys per request.
+  // Hydrate products. BatchGet caps at 100 keys per request. Each product's asset is
+  // presigned into short-lived GET URLs here (batch-signed at board load, §6.5).
   const ids = [...new Set(placements.map(p => String(p.productId)))]
-  const products = await batchGetProducts(ids)
+  const productItems = await batchGetProducts(ids)
+  const products = await Promise.all(productItems.map(signedProduct))
 
   return { board: toBoard(board), placements: placements.map(toPlacement), products }
 }
 
-async function batchGetProducts(ids: string[]) {
+async function batchGetProducts(ids: string[]): Promise<Item[]> {
   const out: Item[] = []
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100)
     const res = await ddb.send(new BatchGetCommand({
       RequestItems: {
-        [TABLE]: { Keys: chunk.map(id => ({ PK: `PROD#${id}`, SK: '#META' })) },
+        [TABLE]: { Keys: chunk.map(id => ({ PK: productPk(id), SK: '#META' })) },
       },
     }))
     out.push(...(res.Responses?.[TABLE] ?? []))
     // NOTE: production code must retry res.UnprocessedKeys
   }
-  return out.map(toProduct)
+  return out
 }
 
 /**
@@ -251,17 +254,5 @@ function toPlacement(i: Item): Placement {
     h: i.h,
     z: i.z,
     version: i.version,
-  }
-}
-
-function toProduct(i: Item): Product {
-  return {
-    id: String(i.PK).replace('PROD#', ''),
-    style: i.style,
-    name: i.name,
-    colorway: i.colorway,
-    priceCents: i.priceCents,
-    season: i.season,
-    asset: i.asset ?? null,
   }
 }

@@ -1,9 +1,20 @@
 import type { EventBridgeEvent } from 'aws-lambda'
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { AssetProcessed, type AssetRef } from '@assortment/shared'
+import { AssetProcessed } from '@assortment/shared'
 import { ddb, TABLE } from '../db/table.js'
-import { assetUrl } from '../s3/client.js'
+import { productPk } from '../db/keys.js'
 import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
+
+/** How a processed asset is STORED on the product: derivative KEYS, not URLs. The
+ * bucket is private, so URLs are presigned per-request at read time (s3/signAssetGet
+ * + products/signAsset), never baked into the record. */
+export interface StoredAsset {
+  assetId: string
+  key128: string
+  key512: string
+  width: number
+  height: number
+}
 
 /**
  * Consumer of media's AssetProcessed event. The API owns product records, so THIS
@@ -16,17 +27,17 @@ import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
 export async function applyAssetProcessed(evt: AssetProcessed): Promise<void> {
   const keyOf = (size: number) => evt.derivatives.find(d => d.size === size)?.key ?? ''
 
-  const asset: AssetRef = {
+  const asset: StoredAsset = {
     assetId: evt.assetId,
-    thumb128: assetUrl(keyOf(128)),
-    thumb512: assetUrl(keyOf(512)),
+    key128: keyOf(128),
+    key512: keyOf(512),
     width: evt.width,
     height: evt.height,
   }
 
   await ddb.send(new UpdateCommand({
     TableName: TABLE,
-    Key: { PK: `PROD#${evt.productId}`, SK: '#META' },
+    Key: { PK: productPk(evt.productId), SK: '#META' },
     UpdateExpression: 'SET asset = :a',
     ExpressionAttributeValues: { ':a': asset },
   }))

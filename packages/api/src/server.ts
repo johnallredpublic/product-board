@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { BoardView, Product, MovePlacements, AddPlacement, UpdateProduct, UploadRequest, CreateBoardRequest, BoardEvents, CatalogResults } from '@assortment/shared'
 import { getBoardView, placementSkMap, createBoard, listBoards, getBoardEvents, getBoardMeta, addPlacement, removePlacement } from './db/boards.js'
-import { getProductMeta, updateProduct, toProductContract } from './db/products.js'
+import { getProductMeta, updateProduct, signedProduct } from './db/products.js'
 import { recordBoardMember } from './db/members.js'
 import { shardCountOf } from './db/sharding.js'
 import { movePlacements, type Move } from './routes/placements.js'
@@ -179,8 +179,9 @@ export function buildServer() {
 
     const placement = await addPlacement(req.auth.tenantId, boardId, input, shardCountOf(board))
     await recordBoardMember(req.auth.tenantId, boardId, req.auth.userId)
-    // Ship the product alongside so peers who don't have it loaded can render at once.
-    broadcastAdded({ boardId, actorUserId: req.auth.userId, placement, product: toProductContract(product) })
+    // Ship the product alongside so peers who don't have it loaded can render at once
+    // (asset presigned like the board-load path).
+    broadcastAdded({ boardId, actorUserId: req.auth.userId, placement, product: await signedProduct(product) })
     return reply.code(201).send(placement)
   })
 
@@ -209,7 +210,7 @@ export function buildServer() {
     }
     const patch = UpdateProduct.parse(req.body)
     const updated = await updateProduct(req.params.id, patch, req.auth.userId)
-    return Product.parse(toProductContract(updated))
+    return Product.parse(await signedProduct(updated))
   })
 
   app.post<{ Params: { id: string } }>('/api/products/:id/assets', async (req, reply) => {

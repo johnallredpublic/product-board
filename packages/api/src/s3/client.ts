@@ -4,7 +4,8 @@
 // runs offline and in AWS. `forcePathStyle` is required for MinIO, which serves
 // buckets as path segments (host/bucket/key) rather than virtual-hosted subdomains.
 
-import { S3Client } from '@aws-sdk/client-s3'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export const s3 = new S3Client(
   process.env.LOCAL
@@ -19,11 +20,13 @@ export const s3 = new S3Client(
 
 export const BUCKET = process.env.BUCKET_NAME ?? 'assortment-assets'
 
-// Public base for derivative URLs stored on the product's AssetRef. Locally this is
-// the path-style MinIO object URL; in production it's the CloudFront domain, set via
-// ASSET_BASE_URL (Phase 11/15). Derivatives are immutable (UUID in the key).
-export const ASSET_BASE_URL =
-  process.env.ASSET_BASE_URL ??
-  (process.env.LOCAL ? `http://localhost:9000/${BUCKET}` : '')
+// The assets bucket is private (BlockPublicAccess.BLOCK_ALL), so derivatives are
+// delivered via short-lived PRESIGNED GET URLs rather than a public base URL — this
+// is the private-tenant delivery §6.5 calls for. URLs are batch-signed at board load
+// (getBoardView) and expire; a reload re-signs. Signing is a local HMAC (no network),
+// so signing every product on a board load is cheap. In front of S3, CloudFront with
+// origin shield collapses origin fetches (see infra/core-stack).
+export const ASSET_URL_TTL_SECONDS = Number(process.env.ASSET_URL_TTL_SECONDS ?? 3600)
 
-export const assetUrl = (key: string) => `${ASSET_BASE_URL}/${key}`
+export const signAssetGet = (key: string): Promise<string> =>
+  getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn: ASSET_URL_TTL_SECONDS })

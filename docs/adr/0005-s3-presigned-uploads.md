@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-08-11)
+Accepted (2026-08-11). **Superseded in part by [ADR 0021](0021-asset-delivery-and-canary-deploys.md)**:
+the *upload* path (presigned PUT, async derivatives) stands; derivative *delivery* is now
+private **presigned GET** (keys stored, URLs signed at read), not public CloudFront/OAC
+reads — with origin shield in front.
 
 ## Context
 
@@ -34,6 +37,11 @@ threshold and 512px above it.
 
 Objects are served through CloudFront with Origin Access Control. The bucket
 blocks all public access.
+
+> **Corrected 2026-08-12 (ADR 0021):** derivative *delivery* changed. The product stores
+> derivative **keys**, and the browser reads them via short-lived **presigned GET URLs**
+> signed at board load — the bucket stays fully private, with CloudFront + origin shield
+> in front. (The upload path above is unchanged.)
 
 ## Consequences
 

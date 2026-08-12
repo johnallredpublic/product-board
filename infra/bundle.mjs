@@ -32,7 +32,7 @@ const targets = [
   { name: 'notify', entry: pkg('api/src/handlers/notify-consumer.ts') },
   { name: 'asset-processed', entry: pkg('api/src/handlers/on-asset-processed.ts') },
   { name: 'reconcile', entry: pkg('api/src/jobs/reconcile.ts') },
-  { name: 'media', entry: pkg('media/src/process.ts') },
+  { name: 'media', entry: pkg('media/src/handler.ts') },
 ]
 
 await Promise.all(

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (2026-08-12)
+Accepted (2026-08-12). **Superseded in part by [ADR 0020](0020-auth-verification-and-tenant-keys.md)**:
+the two "not yet" items in Consequences below — JWT signature verification, and
+tenant-in-partition-key — are now implemented there. The rest of this record stands.
 
 ## Context
 
@@ -42,9 +44,15 @@ This is the BOLA (Broken Object Level Authorization) defense.
   key plus IAM `LeadingKeys` — is stronger (it survives an application bug) and remains
   the documented next step (DESIGN.md §5). Adopting it is a key-migration, backfilled
   via Streams.
+  > **Corrected 2026-08-12 (ADR 0020):** the board aggregate is now tenant-prefixed in
+  > the partition key (`TENANT#<t>#BOARD#<id>`), built in one central `db/keys.ts`
+  > module. IAM `LeadingKeys` (deploy-only) and tenant-prefixing products remain open.
 - **JWT verification is not complete.** The plugin decodes claims but does not yet
   verify the signature against the IdP's JWKS (e.g. Cognito) — that must be wired
   before production; a decoded-but-unverified token is trusted today.
+  > **Corrected 2026-08-12 (ADR 0020):** no longer true — bearer tokens are now
+  > signature-verified against the IdP's JWKS (optional issuer/audience checks), and
+  > auth **fails closed** when `JWKS_URI` is unset outside dev.
 - Hydrated products in a board view are fetched by the board's own placement
   references and not individually re-checked against the tenant; normal data is
   same-tenant, but the stronger key-level scheme would make this impossible by

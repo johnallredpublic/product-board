@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-08-11)
+Accepted (2026-08-11). **Amended by [ADR 0020](0020-auth-verification-and-tenant-keys.md)**
+— the board aggregate's partition keys are now tenant-prefixed (`TENANT#<t>#BOARD#<id>`,
+built in one central `db/keys.ts` module); products stay `PROD#<id>`. The single-table
+design and its access patterns are otherwise unchanged.
 
 ## Context
 

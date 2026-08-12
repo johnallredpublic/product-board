@@ -221,6 +221,9 @@
   .call.decision .tag { color: var(--accent); }
   .call.tradeoff { border-left-color: var(--amber); background: var(--amber-soft); }
   .call.tradeoff .tag { color: var(--amber); }
+  .call.status { border-left-color: var(--accent); background: var(--accent-soft); }
+  .call.status .tag { color: var(--accent); }
+  .call.status b { color: var(--ink); font-weight: 600; }
   .call p:last-child { margin-bottom: 0; }
 
   /* monospace data blocks: API contract, estimates */
@@ -276,7 +279,7 @@
   <div class="hero-inner">
     <p class="eyebrow">System Design · reference</p>
     <h1>Assortment at&nbsp;Scale</h1>
-    <p class="scope">The version of Assortment for <b>500 tenants and 10,000 concurrent users</b> — deliberately <em>not</em> built yet. Today's single-region system is the starting point; this is where it goes when load justifies it. Every significant choice names its tradeoff, and the last section says what to defer.</p>
+    <p class="scope">The version of Assortment for <b>500 tenants and 10,000 concurrent users</b> — deliberately <em>not</em> built in full yet. The single-region system at first draft was the starting point; this is where it goes when load justifies it. Every significant choice names its tradeoff, and the last section says what to defer. <em>(See the status note below for what's since been built.)</em></p>
     <div class="stats">
       <div class="stat"><div class="n">500</div><div class="l">Tenants</div></div>
       <div class="stat"><div class="n">10,000</div><div class="l">Concurrent users</div></div>
@@ -303,6 +306,11 @@
   </nav>
 
   <main>
+    <div class="call status">
+      <span class="tag">Implementation status · 2026-08-12</span>
+      <p>Still a forward-looking design, but much of it is <b>now built</b> at single-region / dev scale. <b>Implemented:</b> the API surface in §3 (including add/remove placement and product edit); tenant-in-partition-key, a central key-builder, and JWKS signature verification (§5); field-level product merge (§6.2); reserved-concurrency bulkheads and opt-in write-sharding (§6.3); OpenSearch search with a DynamoDB off-switch (§6.4); immutable keys, origin shield, and private presigned delivery (§6.5); canary deploys with alarm rollback, reconciliation, and correlation IDs (§7–§8). Real-time (§6.1) works locally via in-process broadcast. <b>Still target-only:</b> the API Gateway WebSocket tier + DynamoDB connection registry + fan-out Lambda (§4/§6.1), IAM <code>LeadingKeys</code> and tenant-prefixed <em>products</em> (§5), per-tenant-tier queues (§6.3), a web client token flow for a real IdP, and every §9 deferral. See the repo README and <code>docs/adr/</code> for detail.</p>
+    </div>
+
     <section id="requirements">
       <div class="sec-head"><span class="num">01</span><h2 class="sec">Requirements and assumptions</h2></div>
       <p class="lead">A good design answer starts by stating what it's optimizing for — and what it's assuming.</p>
@@ -350,15 +358,18 @@
       <p class="lead">For a platform, the interface <b>is</b> the product.</p>
       <p>REST for request/response, WebSocket for live updates. Contracts are Zod schemas in a shared package, versioned; consumers are tolerant readers. Tenant is <strong>never</strong> a request parameter — it comes from the auth token (§5).</p>
       <div class="mono">
-<span class="m">GET</span>   /api/boards                  <span class="c">→ boards in the caller's tenant</span>
-<span class="m">POST</span>  /api/boards                  <span class="c">→ create board</span>
-<span class="m">GET</span>   /api/boards/:id              <span class="c">→ BoardView: board + placements + products, 1 round trip</span>
-<span class="m">PATCH</span> /api/boards/:id/placements   <span class="c">→ batched moves, optimistic-locked (409 on conflict)</span>
-<span class="m">GET</span>   /api/boards/:id/events       <span class="c">→ activity feed, newest first</span>
-<span class="m">POST</span>  /api/products/:id/assets     <span class="c">→ presigned upload (bytes go browser→S3)</span>
-<span class="m">GET</span>   /api/catalog?filter=...      <span class="c">→ search / filter (OpenSearch-backed)</span>
+<span class="m">GET</span>    /api/boards                     <span class="c">→ boards in the caller's tenant</span>
+<span class="m">POST</span>   /api/boards                     <span class="c">→ create board</span>
+<span class="m">GET</span>    /api/boards/:id                 <span class="c">→ BoardView: board + placements + products, 1 round trip</span>
+<span class="m">POST</span>   /api/boards/:id/placements      <span class="c">→ add a product to the board</span>
+<span class="m">PATCH</span>  /api/boards/:id/placements      <span class="c">→ batched moves, optimistic-locked (409 on conflict)</span>
+<span class="m">DELETE</span> /api/boards/:id/placements/:pid <span class="c">→ remove a placement</span>
+<span class="m">GET</span>    /api/boards/:id/events          <span class="c">→ activity feed, newest first</span>
+<span class="m">POST</span>   /api/products/:id/assets        <span class="c">→ presigned upload (bytes go browser→S3)</span>
+<span class="m">PATCH</span>  /api/products/:id               <span class="c">→ edit a product (field-level merge)</span>
+<span class="m">GET</span>    /api/catalog?filter=...         <span class="c">→ search / filter (OpenSearch, or DynamoDB when off)</span>
 
-<span class="m">WS</span>    /realtime  (subscribe boardId)  <span class="c">→ PlacementMoved, PlacementAdded, …</span>
+<span class="m">WS</span>     /realtime  (subscribe boardId)  <span class="c">→ PlacementMoved, PlacementAdded, PlacementRemoved</span>
       </div>
     </section>
 
@@ -378,7 +389,7 @@
 
     <section id="tenancy">
       <div class="sec-head"><span class="num">05</span><h2 class="sec">Multi-tenancy</h2></div>
-      <div class="call decision"><span class="tag">Decision</span><p><strong>Pooled, not siloed.</strong> One table, tenant encoded in the partition key (<code>TENANT#&lt;t&gt;#BOARD#&lt;id&gt;</code>). A table or stack per tenant is rejected at 500 tenants — it multiplies operational surface and deploy risk by tenant count for isolation a scoped key already gives.</p></div>
+      <div class="call decision"><span class="tag">Decision</span><p><strong>Pooled, not siloed.</strong> One table, tenant encoded in the partition key (<code>TENANT#&lt;t&gt;#BOARD#&lt;id&gt;</code> — now implemented for the board aggregate; products remain <code>PROD#&lt;id&gt;</code>). A table or stack per tenant is rejected at 500 tenants — it multiplies operational surface and deploy risk by tenant count for isolation a scoped key already gives.</p></div>
       <p><strong>Isolation, defense in depth:</strong></p>
       <ul>
         <li><strong>Tenant comes from the token, never the request.</strong> The <code>tenantId</code> claim is injected server-side into every key; a client can't ask for another tenant's board because it can't name the partition.</li>

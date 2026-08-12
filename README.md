@@ -130,37 +130,62 @@ pnpm --filter @assortment/web build
 # 2. validate offline — produces CloudFormation, no AWS needed
 pnpm --filter @assortment/infra synth
 
-# 3. deploy both stacks (needs AWS creds; core first, media depends on it)
-#    Set the IdP so the API verifies token signatures (ADR 0020); without JWKS_URI
-#    the deployed API fails closed and rejects every request.
-JWKS_URI=https://<your-idp>/.well-known/jwks.json \
-JWT_ISSUER=https://<your-idp>/ JWT_AUDIENCE=<your-app> \
-SHARP_LAYER_ARN=<your sharp layer arn> \
-  pnpm --filter @assortment/infra deploy
+# 3. deploy both stacks (needs AWS creds; core first, media depends on it).
+#    Choose an auth mode (see below) — deploying with NEITHER makes the API 401
+#    every request. This is the throwaway-demo form:
+AUTH_MODE=dev pnpm --filter @assortment/infra deploy
 ```
 
-### Deploying on a free-tier account (no OpenSearch)
+The `deploy` script bundles each handler (esbuild → `infra/dist/*`) and builds the
+Sharp Lambda layer (a cross-install for linux/arm64 — needs npm network access, **not**
+Docker), then runs `cdk deploy --all`. On success, `AssortmentCore` outputs **`CdnUrl`**
+(open this — it's the app) and **`ApiUrl`**.
+
+**Choose an auth mode — the app is unusable without one.** The API takes the tenant
+from the caller's identity, resolved per the env set at deploy time:
+
+- **Dev mode (throwaway demo, INSECURE):** `AUTH_MODE=dev`. Every request resolves to a
+  single shared `dev-tenant` / `dev-user` with **no authentication** — anyone with the
+  URL has full access. This is the only mode where the app works end-to-end today, so
+  it's what a free-account trial uses. Tear it down when done.
+- **Real IdP (secure):** set `JWKS_URI` (+ optional `JWT_ISSUER` / `JWT_AUDIENCE`) so the
+  API verifies token signatures (ADR 0020). **Caveat:** the web client does not yet send
+  a token, so you'd wire a login/token flow before this path is interactively usable.
+  ```bash
+  JWKS_URI=https://<idp>/.well-known/jwks.json JWT_ISSUER=https://<idp>/ JWT_AUDIENCE=<app> \
+    pnpm --filter @assortment/infra deploy
+  ```
+
+With neither `AUTH_MODE=dev` nor `JWKS_URI`, the API **fails closed** and returns 401 to
+everything (safe default, but nothing works).
+
+### Deploying on a free-tier account
 
 The managed **OpenSearch domain is the one resource that isn't free-tier** (a
-`t3.small.search` node + EBS, and ~15–20 min to create). Turn it off with
-`SEARCH_ENABLED=false` — CDK then omits the domain and its grants, and the API serves
-the catalog from a **DynamoDB fallback** (same tenant-scoped filters, no relevance
-ranking; suits small deploys — see [ADR 0017](docs/adr/0017-catalog-search.md)):
+`t3.small.search` node + EBS, ~15–20 min to create). Turn it off with
+`SEARCH_ENABLED=false` — CDK omits the domain and its grants, and the API serves the
+catalog from a **DynamoDB fallback** (same tenant-scoped filters, no relevance ranking;
+see [ADR 0017](docs/adr/0017-catalog-search.md)). A complete, runnable free-tier deploy —
+no OpenSearch, dev auth so the app actually works:
 
 ```bash
-SEARCH_ENABLED=false pnpm --filter @assortment/infra synth   # verify the domain is gone
-SEARCH_ENABLED=false pnpm --filter @assortment/infra deploy
+pnpm --filter @assortment/web build                                   # 1. web assets (required)
+SEARCH_ENABLED=false pnpm --filter @assortment/infra synth            # 2. verify the domain is gone
+SEARCH_ENABLED=false AUTH_MODE=dev pnpm --filter @assortment/infra deploy   # 3. deploy
 ```
 
-The switch works locally too: run with `SEARCH_ENABLED=false` and you can skip the
-OpenSearch container and `search:setup` in "Run it locally" above. Re-enable later by
-leaving `SEARCH_ENABLED` unset — no data migration; products re-project into the index
-as they next change (ADR 0017).
+Then open the `CdnUrl` output. Everything else stays within the 12-month free tier for a
+light trial (Lambda, HTTP API, CloudFront, S3, DynamoDB on-demand); a few items carry a
+small non-zero cost — DynamoDB point-in-time recovery, CloudFront origin-shield requests,
+and CloudWatch alarms beyond the free 10 (the stack defines 6).
 
-`synth`/`deploy` first bundle each handler (esbuild) to `infra/dist/*`. On success,
-`AssortmentCore` outputs **`CdnUrl`** (the app) and **`ApiUrl`**. To tear down:
-`pnpm --filter @assortment/infra exec cdk destroy --all` (the table and assets
-bucket are `RETAIN` — delete them by hand if you really mean it).
+The `SEARCH_ENABLED` switch works locally too: run with `SEARCH_ENABLED=false` and skip
+the OpenSearch container and `search:setup` in "Run it locally". Re-enable later by
+leaving it unset — no data migration; products re-project into the index as they next
+change (ADR 0017).
+
+To tear down: `pnpm --filter @assortment/infra exec cdk destroy --all` (the table and
+assets bucket are `RETAIN` — delete them by hand if you really mean it).
 
 See [infra/README.md](infra/README.md) for the stack contents and the two design
 calls (assets bucket in core; S3→EventBridge to avoid a stack cycle).
@@ -218,6 +243,11 @@ production-hardened product.
   through the stream as a **`ProductPriceChanged`** domain event (previously dead
   wiring) to the notify pipeline, fanned out to the members of the affected boards via
   GSI1. ADR [0019](docs/adr/0019-placement-lifecycle-and-product-editing.md).
+- ✅ **Private asset delivery & canary deploys** — derivatives are stored as **keys**
+  and delivered via **short-lived presigned GET URLs** batch-signed at board load (the
+  bucket stays fully private), with **CloudFront origin shield** in front. The API
+  Lambda deploys behind an **alias with a CodeDeploy canary** (10% for 5 min, automatic
+  rollback on an errors alarm). ADR [0021](docs/adr/0021-asset-delivery-and-canary-deploys.md).
 
 **Still open** — deploy-wiring and hardening (no new product features):
 1. **Real-time prod wiring** — the API Gateway WebSocket API + fan-out Lambda in CDK
@@ -227,9 +257,16 @@ production-hardened product.
    partition-key are done ([ADR 0020](docs/adr/0020-auth-verification-and-tenant-keys.md));
    what remains is the IAM `LeadingKeys` session policy (deploy-only) and tenant-prefixing
    products (crosses into the media service + event contracts).
-3. **Deploy-only wiring deferred throughout** — the two CDK stacks `synth` cleanly but
-   were never `deploy`ed here (no AWS creds): a real Sharp layer ARN, JWKS, per-tenant
-   -tier queues, and the prod WebSocket API are the remaining glue.
+3. **Web client login/token flow** — the browser sends no bearer token, so a real-IdP
+   deploy (`JWKS_URI`) isn't interactively usable yet; a hosted deploy works today only
+   with `AUTH_MODE=dev`. Wiring a sign-in that attaches a token to API/WebSocket calls is
+   the missing piece for a secure hosted app.
+4. **Per-tenant-tier queues** — a separate bulk queue with its own concurrency, the
+   next refinement past the reserved-concurrency bulkheads (DESIGN.md §6.3).
+5. **Actually running `cdk deploy`** — both stacks `synth` cleanly and the wiring is
+   verified there (canary group, origin shield, alias, alarms), but nothing has been
+   deployed here (no AWS creds). Exercising the canary bake/rollback and the presigned
+   delivery against real S3/CloudFront needs a live account.
 
 ## Documentation index
 

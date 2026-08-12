@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-08-12)
+Accepted (2026-08-12). **Note:** since [ADR 0020](0020-auth-verification-and-tenant-keys.md)
+the board/shard partition keys shown below are tenant-prefixed — read `BOARD#<id>` as
+`TENANT#<t>#BOARD#<id>` and `BOARD#<id>#S<n>` as `TENANT#<t>#BOARD#<id>#S<n>`. The
+sharding scheme itself is unchanged.
 
 ## Context
 

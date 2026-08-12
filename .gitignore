@@ -1,3 +1,9 @@
+# macOS
+.DS_Store
+
+# Local reference material (not product source)
+Assortment_Build_Guide_1.md
+
 # Logs
 logs
 *.log

@@ -1,7 +1,6 @@
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import sharp from 'sharp'
-import type { S3Event } from 'aws-lambda'
 import type { AssetProcessed } from '@assortment/shared'
 import { ddb, TABLE } from './db/table.js'
 import { s3, BUCKET } from './s3/client.js'
@@ -70,10 +69,5 @@ async function markReady(productId: string, assetId: string, key: string, width:
   }))
 }
 
-/** Lambda entry point, wired to S3 ObjectCreated in Phase 11 (media-stack). */
-export async function handler(event: S3Event): Promise<void> {
-  for (const rec of event.Records) {
-    const key = decodeURIComponent(rec.s3.object.key.replace(/\+/g, ' '))
-    await processUpload(key)
-  }
-}
+// The Lambda entry point lives in handler.ts, which dispatches the S3 ObjectCreated
+// event (delivered via EventBridge) to processUpload().
