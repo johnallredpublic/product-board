@@ -1,4 +1,5 @@
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge'
+import { withCorrelationId } from '../obs/observability.js'
 
 const BUS = process.env.EVENT_BUS_NAME
 const SOURCE = 'assortment.board'
@@ -36,7 +37,8 @@ export async function publishDomainEvent(
       EventBusName: BUS,
       Source: SOURCE,
       DetailType: detailType,
-      Detail: JSON.stringify(detail),
+      // Carry the correlation id in the payload so the trace survives the hop.
+      Detail: JSON.stringify(withCorrelationId(detail)),
     }],
   }))
 }

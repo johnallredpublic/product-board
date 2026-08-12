@@ -5,6 +5,8 @@ import { unmarshall } from '@aws-sdk/util-dynamodb'
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { ddb, TABLE } from '../db/table.js'
 import { publishDomainEvent } from '../events/bus.js'
+import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
+import { logError, recordMetric, flushMetrics } from '../obs/observability.js'
 
 // ─── The transactional outbox, for free ──────────────────────────────────────
 // The stream IS the change log, produced atomically with each write — so there's
@@ -19,17 +21,22 @@ export async function handler(event: DynamoDBStreamEvent): Promise<DynamoDBBatch
   const failures: { itemIdentifier: string }[] = []
 
   for (const record of event.Records) {
+    // Stream records don't carry a correlation id (they're DB diffs), so start a
+    // fresh trace here; publishDomainEvent then propagates it downstream.
+    const correlationId = newCorrelationId()
     try {
-      await processRecord(record)
+      await runWithCorrelation(correlationId, () => processRecord(record))
+      recordMetric('ChangeRecordsProcessed', 1)
     } catch (err) {
-      console.error({ err, seq: record.dynamodb?.SequenceNumber }, 'stream record failed')
+      logError('stream record failed', err, { seq: record.dynamodb?.SequenceNumber, correlationId })
       // Partial batch response: only the failed records are retried, so one bad
       // record doesn't re-run the whole batch (needs ReportBatchItemFailures on
-      // the event source mapping — Phase 11).
+      // the event source mapping — Phase 15).
       failures.push({ itemIdentifier: record.dynamodb!.SequenceNumber! })
     }
   }
 
+  flushMetrics()
   return { batchItemFailures: failures }
 }
 

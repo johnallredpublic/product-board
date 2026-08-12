@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { SQSEvent } from 'aws-lambda'
 import { createNotifyHandler, type NotifyDeps } from '../src/handlers/notify-consumer.js'
+import { getCorrelationId } from '../src/obs/correlation.js'
 
 // Pure unit test: the batching/idempotency logic with injected deps. No AWS.
 
@@ -49,6 +50,18 @@ describe('notify consumer', () => {
     await h(sqsEvent([{ eventId: 'e2', boardId: 'b', placementId: 'p' }, { eventId: 'e1', boardId: 'b', placementId: 'q' }]))
     await h(sqsEvent([{ eventId: 'e1', boardId: 'b', placementId: 'q' }, { eventId: 'e2', boardId: 'b', placementId: 'p' }]))
     expect(keys[0]).toBe(keys[1])
+  })
+
+  it('binds the correlation id carried in the event (cross-boundary trace)', async () => {
+    let seen: string | undefined
+    const deps: NotifyDeps = {
+      findSubscribers: async () => { seen = getCorrelationId(); return [] },
+      sendDigestOnce: async () => {},
+    }
+    await createNotifyHandler(deps)(
+      sqsEvent([{ eventId: 'e1', boardId: 'b', placementId: 'p', correlationId: 'trace-42' }]),
+    )
+    expect(seen).toBe('trace-42')
   })
 
   it('reports only the poison record in batchItemFailures', async () => {

@@ -1,6 +1,8 @@
 import type { SQSEvent, SQSBatchResponse } from 'aws-lambda'
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { ddb, TABLE } from '../db/table.js'
+import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
+import { recordMetric, flushMetrics } from '../obs/observability.js'
 
 export interface Notification { eventId: string; boardId: string; text: string }
 export interface Subscriber { userId: string }
@@ -36,11 +38,16 @@ export function createNotifyHandler(deps: NotifyDeps) {
     for (const record of event.Records) {
       try {
         const detail = JSON.parse(record.body)
-        for (const s of await deps.findSubscribers(detail)) {
-          const list = byRecipient.get(s.userId) ?? []
-          list.push(toNotification(detail))
-          byRecipient.set(s.userId, list)
-        }
+        // Bind the correlation id carried in the event so downstream logs join the
+        // same trace across the EventBridge -> SQS boundary.
+        const correlationId = detail.correlationId ?? newCorrelationId()
+        await runWithCorrelation(correlationId, async () => {
+          for (const s of await deps.findSubscribers(detail)) {
+            const list = byRecipient.get(s.userId) ?? []
+            list.push(toNotification(detail))
+            byRecipient.set(s.userId, list)
+          }
+        })
       } catch {
         failures.push({ itemIdentifier: record.messageId })
       }
@@ -50,6 +57,8 @@ export function createNotifyHandler(deps: NotifyDeps) {
       await deps.sendDigestOnce(userId, items, digestKey(userId, items))
     }
 
+    recordMetric('DigestsSent', byRecipient.size)
+    flushMetrics()
     return { batchItemFailures: failures }
   }
 }

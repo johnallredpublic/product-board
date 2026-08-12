@@ -8,6 +8,7 @@ import { getBoardView, placementSkMap, createBoard, listBoards, getBoardEvents }
 import { movePlacements, type Move } from './routes/placements.js'
 import { createAssetUpload } from './routes/assets.js'
 import { ConflictError } from './errors.js'
+import { enterCorrelation } from './obs/correlation.js'
 
 /** Flatten a ZodError into a single human-readable line for the error body. */
 const zodMessage = (e: ZodError) =>
@@ -20,6 +21,12 @@ export function buildServer() {
   // API (:3000). In production the app is served same-origin via CloudFront (ADR
   // 015 territory), so this reflect-origin policy is a local-only affordance.
   app.register(cors, { origin: true })
+
+  // Bind a correlation id per request (Fastify's genReqId is a UUID). Any domain
+  // events published while handling the request carry it downstream.
+  app.addHook('onRequest', async (req) => {
+    enterCorrelation(String(req.id))
+  })
 
   // Central error mapping. Input validation (MovePlacements.parse on the body) throws
   // a ZodError -> 400 validation_failed. ConflictError from the optimistic lock -> 409.
