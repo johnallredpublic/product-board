@@ -58,6 +58,31 @@ export const MovePlacements = z.object({
   })).min(1).max(200),
 })
 
+/** Body for adding a product to a board. The server assigns id, z-order, version. */
+export const AddPlacement = z.object({
+  productId: z.string().uuid(),
+  x: z.number(),
+  y: z.number(),
+  w: z.number().positive().optional(), // defaults applied server-side
+  h: z.number().positive().optional(),
+})
+export type AddPlacement = z.infer<typeof AddPlacement>
+
+/**
+ * Body for editing a product — a partial patch (field-level merge, DESIGN.md §6.2):
+ * only the fields present are changed. At least one must be supplied.
+ */
+export const UpdateProduct = z.object({
+  name:       z.string().min(1).max(200).optional(),
+  style:      z.string().min(1).max(64).optional(),
+  colorway:   z.string().max(64).optional(),
+  priceCents: z.number().int().nonnegative().optional(),
+  season:     Product.shape.season.optional(),
+}).refine(o => Object.values(o).some(v => v !== undefined), {
+  message: 'at least one field is required',
+})
+export type UpdateProduct = z.infer<typeof UpdateProduct>
+
 export const ApiError = z.object({
   error: z.object({
     code: z.enum(['not_found', 'conflict', 'validation_failed', 'unauthorized']),
@@ -92,6 +117,24 @@ export const BoardList = z.object({
 })
 export type BoardList = z.infer<typeof BoardList>
 
+/** A product as it appears in catalog search results (no image needed to list). */
+export const CatalogItem = z.object({
+  id:         z.string().uuid(),
+  style:      z.string(),
+  name:       z.string(),
+  colorway:   z.string(),
+  priceCents: z.number().int().nonnegative(),
+  season:     Product.shape.season,
+})
+export type CatalogItem = z.infer<typeof CatalogItem>
+
+/** What the catalog search route returns. */
+export const CatalogResults = z.object({
+  items: z.array(CatalogItem),
+  total: z.number().int().nonnegative(),
+})
+export type CatalogResults = z.infer<typeof CatalogResults>
+
 const Point = z.object({ x: z.number(), y: z.number() })
 
 /** A placement change derived from the DynamoDB stream (Phase 8). */
@@ -118,12 +161,14 @@ export type BoardEvents = z.infer<typeof BoardEvents>
  * (Phase 10): additive changes are safe, anything else needs a new version.
  */
 export const PlacementMoved = z.object({
-  version:     z.literal(1),
-  boardId:     z.string(),
-  placementId: z.string(),
-  from:        Point.nullable(),
-  to:          Point.nullable(),
-  at:          z.string(),
-  eventId:     z.string(),
+  version:      z.literal(1),
+  tenantId:     z.string().optional(), // scopes the board/member keys the notifier builds
+  boardId:      z.string(),
+  placementId:  z.string(),
+  from:         Point.nullable(),
+  to:           Point.nullable(),
+  at:           z.string(),
+  eventId:      z.string(),
+  actorUserId:  z.string().optional(), // who moved it, so we don't notify them of it
 })
 export type PlacementMoved = z.infer<typeof PlacementMoved>

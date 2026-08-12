@@ -1,6 +1,7 @@
 import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { ddb, TABLE } from '../db/table.js'
 import { ConflictError } from '../errors.js'
+import { placementPk } from '../db/sharding.js'
 
 /**
  * One position update. Addressed by the item's FULL sort key, not the bare
@@ -43,7 +44,7 @@ export interface Move {
 // before calling this. Trade: SK-embedded z gives free ordering but costs direct
 // id-addressability; the resolution step is the price we pay for that ordering.
 
-export async function movePlacements(boardId: string, moves: Move[]) {
+export async function movePlacements(tenantId: string, boardId: string, moves: Move[], userId: string, shardCount = 1) {
   // TransactWrite caps at 100 items per call.
   for (let i = 0; i < moves.length; i += 100) {
     const chunk = moves.slice(i, i + 100)
@@ -52,11 +53,15 @@ export async function movePlacements(boardId: string, moves: Move[]) {
         TransactItems: chunk.map(m => ({
           Update: {
             TableName: TABLE,
-            Key: { PK: `BOARD#${boardId}`, SK: m.sk },
-            UpdateExpression: 'SET x = :x, y = :y, version = version + :one',
+            // Route to the placement's shard (the board PK when unsharded). The id is
+            // the last segment of the SK (ITEM#<zzzz>#<id>).
+            Key: { PK: placementPk(tenantId, boardId, m.sk.split('#')[2] ?? '', shardCount), SK: m.sk },
+            // updatedBy rides into the stream's NewImage -> PlacementMoved.actorUserId,
+            // so the notifier can skip notifying the mover of their own move.
+            UpdateExpression: 'SET x = :x, y = :y, version = version + :one, updatedBy = :u',
             ConditionExpression: 'version = :expected',
             ExpressionAttributeValues: {
-              ':x': m.x, ':y': m.y, ':one': 1, ':expected': m.version,
+              ':x': m.x, ':y': m.y, ':one': 1, ':expected': m.version, ':u': userId,
             },
           },
         })),

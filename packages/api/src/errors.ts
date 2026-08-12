@@ -6,3 +6,10 @@ export class ConflictError extends Error {
     this.name = 'ConflictError'
   }
 }
+
+export class UnauthorizedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message)
+    this.name = 'UnauthorizedError'
+  }
+}

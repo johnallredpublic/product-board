@@ -8,6 +8,7 @@ import { marshall } from '@aws-sdk/util-dynamodb'
 import { randomUUID } from 'node:crypto'
 import { ddb, TABLE } from '../src/db/table.js'
 import { getBoardEvents } from '../src/db/boards.js'
+import { boardPk } from '../src/db/keys.js'
 import { processRecord, handler } from '../src/handlers/stream-consumer.js'
 
 // Consumer tested as a pure function with synthetic stream records — no AWS stream
@@ -17,6 +18,7 @@ const dynamo = new DynamoDBClient({
   endpoint: 'http://localhost:8000', region: 'local',
   credentials: { accessKeyId: 'x', secretAccessKey: 'x' },
 })
+const TENANT = 'dev-tenant'
 const boardId = randomUUID()
 const placementId = randomUUID()
 const sk = `ITEM#0001#${placementId}`
@@ -34,9 +36,9 @@ function makeRecord(opts: {
     ApproximateCreationDateTime: Math.floor(AT / 1000),
     StreamViewType: 'NEW_AND_OLD_IMAGES',
   }
-  if (!opts.bad) dynamodb.Keys = marshall({ PK: `BOARD#${boardId}`, SK: sk })
-  if (opts.before) dynamodb.OldImage = marshall({ PK: `BOARD#${boardId}`, SK: sk, productId: 'p', ...opts.before, w: 1, h: 1, z: 1, version: 0 })
-  if (opts.after) dynamodb.NewImage = marshall({ PK: `BOARD#${boardId}`, SK: sk, productId: 'p', ...opts.after, w: 1, h: 1, z: 1, version: 1 })
+  if (!opts.bad) dynamodb.Keys = marshall({ PK: boardPk(TENANT, boardId), SK: sk })
+  if (opts.before) dynamodb.OldImage = marshall({ PK: boardPk(TENANT, boardId), SK: sk, productId: 'p', ...opts.before, w: 1, h: 1, z: 1, version: 0 })
+  if (opts.after) dynamodb.NewImage = marshall({ PK: boardPk(TENANT, boardId), SK: sk, productId: 'p', ...opts.after, w: 1, h: 1, z: 1, version: 1 })
   return { eventID: opts.seq, eventName: opts.eventName, eventSource: 'aws:dynamodb', dynamodb } as DynamoDBRecord
 }
 
@@ -66,7 +68,7 @@ beforeAll(async () => {
   // Two real placements so the summary projection has something to count.
   for (let i = 0; i < 2; i++) {
     await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-      PK: `BOARD#${boardId}`, SK: `ITEM#000${i}#${randomUUID()}`, productId: 'p', x: 0, y: 0, w: 1, h: 1, z: i, version: 0,
+      PK: boardPk(TENANT, boardId), SK: `ITEM#000${i}#${randomUUID()}`, productId: 'p', x: 0, y: 0, w: 1, h: 1, z: i, version: 0,
     }}))
   }
 })
@@ -74,7 +76,7 @@ beforeAll(async () => {
 describe('stream consumer', () => {
   it('writes a change event with before/after for a MODIFY', async () => {
     await processRecord(makeRecord({ seq: 'SEQ-1', eventName: 'MODIFY', before: { x: 0, y: 0 }, after: { x: 5, y: 6 } }))
-    const events = await getBoardEvents(boardId)
+    const events = await getBoardEvents(TENANT, boardId)
     expect(events).toHaveLength(1)
     expect(events[0]!.type).toBe('MODIFY')
     expect(events[0]!.placementId).toBe(placementId)
@@ -84,13 +86,13 @@ describe('stream consumer', () => {
 
   it('is idempotent under redelivery (same sequence number → no duplicate)', async () => {
     await processRecord(makeRecord({ seq: 'SEQ-1', eventName: 'MODIFY', before: { x: 0, y: 0 }, after: { x: 5, y: 6 } }))
-    const events = await getBoardEvents(boardId)
+    const events = await getBoardEvents(TENANT, boardId)
     expect(events).toHaveLength(1) // still one
   })
 
   it('maintains the #SUMMARY projection (placement count)', async () => {
     const summary = (await ddb.send(new GetCommand({
-      TableName: TABLE, Key: { PK: `BOARD#${boardId}`, SK: '#SUMMARY' },
+      TableName: TABLE, Key: { PK: boardPk(TENANT, boardId), SK: '#SUMMARY' },
     }))).Item
     expect(summary?.placementCount).toBe(2)
     expect(summary?.lastModified).toBeTruthy()
@@ -103,7 +105,7 @@ describe('stream consumer', () => {
     ] } as any)
     expect(res.batchItemFailures).toEqual([{ itemIdentifier: 'BAD-1' }])
     // the good record still landed
-    const events = await getBoardEvents(boardId)
+    const events = await getBoardEvents(TENANT, boardId)
     expect(events.some(e => e.eventId === 'SEQ-2')).toBe(true)
   })
 })

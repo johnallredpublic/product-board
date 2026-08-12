@@ -9,9 +9,11 @@ import {
   aws_logs as logs,
 } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const dist = (name: string) => fileURLToPath(new URL(`../dist/${name}`, import.meta.url))
+const layersSharp = fileURLToPath(new URL('../layers/sharp', import.meta.url))
 
 export interface MediaStackProps extends StackProps {
   table: dynamodb.ITable
@@ -30,21 +32,30 @@ export class MediaStack extends Stack {
 
     const dlq = new sqs.Queue(this, 'MediaDlq', { retentionPeriod: Duration.days(14) })
 
-    // Sharp ships as a Lambda layer (native binary can't be esbuild-bundled). Pin a
-    // real layer ARN per region at deploy time; the placeholder keeps synth valid.
-    const sharpLayer = lambda.LayerVersion.fromLayerVersionArn(
-      this, 'SharpLayer',
-      process.env.SHARP_LAYER_ARN ?? `arn:aws:lambda:${this.region}:000000000000:layer:sharp:1`,
-    )
+    // Sharp is native and can't be esbuild-bundled, so it ships as a Lambda layer.
+    // `pnpm layer:sharp` builds it (linux/arm64) into infra/layers/sharp; if that
+    // hasn't run, fall back to a SHARP_LAYER_ARN env (placeholder keeps synth valid).
+    const sharpLayer = existsSync(layersSharp)
+      ? new lambda.LayerVersion(this, 'SharpLayer', {
+          code: lambda.Code.fromAsset(layersSharp),
+          compatibleRuntimes: [lambda.Runtime.NODEJS_22_X],
+          compatibleArchitectures: [lambda.Architecture.ARM_64],
+        })
+      : lambda.LayerVersion.fromLayerVersionArn(
+          this, 'SharpLayer',
+          process.env.SHARP_LAYER_ARN ?? `arn:aws:lambda:${this.region}:000000000000:layer:sharp:1`,
+        )
 
     const processFn = new lambda.Function(this, 'ProcessFn', {
       runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64, // match the Sharp layer's binary
       handler: 'index.handler',
       code: lambda.Code.fromAsset(dist('media')),
       memorySize: 1536,             // CPU scales with memory; image work is CPU-heavy
       timeout: Duration.minutes(1),
       layers: [sharpLayer],
       deadLetterQueue: dlq,
+      reservedConcurrentExecutions: 20, // bulkhead: bounds a bulk upload's blast radius
       environment: {
         TABLE_NAME: props.table.tableName,
         BUCKET_NAME: props.assetsBucket.bucketName,

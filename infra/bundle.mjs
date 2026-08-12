@@ -30,6 +30,7 @@ const targets = [
   { name: 'api', entry: pkg('api/src/lambda.ts') },
   { name: 'stream', entry: pkg('api/src/handlers/stream-consumer.ts') },
   { name: 'notify', entry: pkg('api/src/handlers/notify-consumer.ts') },
+  { name: 'asset-processed', entry: pkg('api/src/handlers/on-asset-processed.ts') },
   { name: 'reconcile', entry: pkg('api/src/jobs/reconcile.ts') },
   { name: 'media', entry: pkg('media/src/process.ts') },
 ]

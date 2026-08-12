@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: typecheck · build · synth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (all packages)
+        run: pnpm -r typecheck
+      - name: Build web (enforces the Angular bundle budget)
+        run: pnpm --filter @assortment/web build
+      - name: CDK synth (offline)
+        run: pnpm --filter @assortment/infra synth
+
+  test:
+    name: unit · integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Real infra for the integration layer — never mock the database.
+      - name: Start DynamoDB Local + MinIO
+        run: docker compose up -d
+      - name: Wait for local AWS
+        run: |
+          curl -sf --retry 30 --retry-delay 1 --retry-connrefused -o /dev/null http://localhost:8000 || true
+          curl -sf --retry 30 --retry-delay 1 --retry-connrefused http://localhost:9000/minio/health/live
+      - run: pnpm --filter @assortment/api db:create
+      - run: pnpm --filter @assortment/api s3:create
+
+      - name: API + media integration tests
+        run: |
+          pnpm --filter @assortment/api test
+          pnpm --filter @assortment/media test
+
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - name: Web unit tests (headless Chrome)
+        run: pnpm --filter @assortment/web test
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+
+  # E2E (Playwright) runs locally: `pnpm --filter @assortment/web e2e` with the API
+  # up. It's kept out of CI to avoid multi-server orchestration flakiness; wire it
+  # in as a follow-up if desired.

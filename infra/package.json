@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "bundle": "node bundle.mjs",
+    "layer:sharp": "node build-sharp-layer.mjs",
     "synth": "pnpm bundle && cdk synth",
-    "deploy": "pnpm bundle && cdk deploy --all",
+    "deploy": "pnpm bundle && pnpm layer:sharp && cdk deploy --all",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

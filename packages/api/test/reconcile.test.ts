@@ -5,6 +5,7 @@ import {
 import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
 import { ddb, TABLE } from '../src/db/table.js'
+import { boardPk } from '../src/db/keys.js'
 import { reconcileBoardSummaries } from '../src/jobs/reconcile.js'
 
 // Reconciliation against DynamoDB Local. Requires `docker compose up -d`.
@@ -13,6 +14,7 @@ const dynamo = new DynamoDBClient({
   endpoint: 'http://localhost:8000', region: 'local',
   credentials: { accessKeyId: 'x', secretAccessKey: 'x' },
 })
+const TENANT = 'dev-tenant'
 
 // Three boards: drifted summary, missing summary, correct summary.
 const drifted = randomUUID()
@@ -42,22 +44,22 @@ async function ensureTable() {
 
 async function seedBoard(boardId: string, placements: number, summaryCount: number | null) {
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-    PK: `BOARD#${boardId}`, SK: '#META', name: 'B', season: 'FA26', createdAt: new Date().toISOString(),
+    PK: boardPk(TENANT, boardId), SK: '#META', tenantId: TENANT, name: 'B', season: 'FA26', createdAt: new Date().toISOString(),
   }}))
   for (let i = 0; i < placements; i++) {
     await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-      PK: `BOARD#${boardId}`, SK: `ITEM#000${i}#${randomUUID()}`, productId: 'p', x: 0, y: 0, w: 1, h: 1, z: i, version: 0,
+      PK: boardPk(TENANT, boardId), SK: `ITEM#000${i}#${randomUUID()}`, productId: 'p', x: 0, y: 0, w: 1, h: 1, z: i, version: 0,
     }}))
   }
   if (summaryCount !== null) {
     await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-      PK: `BOARD#${boardId}`, SK: '#SUMMARY', placementCount: summaryCount, lastModified: new Date().toISOString(),
+      PK: boardPk(TENANT, boardId), SK: '#SUMMARY', placementCount: summaryCount, lastModified: new Date().toISOString(),
     }}))
   }
 }
 
 const summaryCount = async (boardId: string) => (await ddb.send(new GetCommand({
-  TableName: TABLE, Key: { PK: `BOARD#${boardId}`, SK: '#SUMMARY' },
+  TableName: TABLE, Key: { PK: boardPk(TENANT, boardId), SK: '#SUMMARY' },
 }))).Item?.placementCount
 
 beforeAll(async () => {

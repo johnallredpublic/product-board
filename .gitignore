@@ -151,3 +151,6 @@ packages/web/blob-report/
 # CDK
 infra/cdk.out/
 infra/dist/
+
+# CDK sharp layer (built artifact)
+infra/layers/

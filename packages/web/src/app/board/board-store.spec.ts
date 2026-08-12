@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing'
-import type { BoardView } from '@assortment/shared'
+import type { BoardView, Placement, Product } from '@assortment/shared'
 import { BoardStore } from './board-store'
 import { ApiService } from '../core/api.service'
 
@@ -51,5 +51,49 @@ describe('BoardStore', () => {
     const byId = new Map(store.placements().map((p) => [p.id, p]))
     expect(byId.get('p1')?.version).toBe(1)
     expect(byId.get('p2')?.version).toBe(0)
+  })
+
+  it('applies a remote add (with its product) and is idempotent', () => {
+    const p: Placement = { id: 'p3', productId: 'prod3', x: 0, y: 0, w: 140, h: 170, z: 2, version: 0 }
+    const prod: Product = { id: 'prod3', style: 'S3', name: 'Sandal', colorway: 'Tan', priceCents: 100, season: 'FA26', asset: null }
+    store.applyRemoteAdd(p, prod)
+    expect(store.placements().length).toBe(3)
+    expect(store.renderables().find(r => r.id === 'p3')?.product?.name).toBe('Sandal')
+    store.applyRemoteAdd(p, prod) // duplicate delivery must not double-add
+    expect(store.placements().length).toBe(3)
+  })
+
+  it('applies a remote remove', () => {
+    store.applyRemoteRemove('p1')
+    expect(store.placements().map(p => p.id)).toEqual(['p2'])
+  })
+})
+
+describe('BoardStore add/remove via API', () => {
+  it('addProduct persists then inserts the returned placement', async () => {
+    const created: Placement = { id: 'new1', productId: 'prodX', x: 120, y: 120, w: 140, h: 170, z: 5, version: 0 }
+    const api = { getBoard: async () => view, addPlacement: async () => created }
+    TestBed.configureTestingModule({ providers: [BoardStore, { provide: ApiService, useValue: api }] })
+    const store = TestBed.inject(BoardStore)
+    await store.load('b')
+
+    const prod: Product = { id: 'prodX', style: 'SX', name: 'Boot', colorway: 'Brown', priceCents: 200, season: 'FA26', asset: null }
+    await store.addProduct(prod, 120, 120)
+    expect(store.placements().map(p => p.id)).toContain('new1')
+    expect(store.renderables().find(r => r.id === 'new1')?.product?.name).toBe('Boot')
+  })
+
+  it('removeSelected deletes each selected id and clears the selection', async () => {
+    const removed: string[] = []
+    const api = { getBoard: async () => view, removePlacement: async (_b: string, id: string) => { removed.push(id) } }
+    TestBed.configureTestingModule({ providers: [BoardStore, { provide: ApiService, useValue: api }] })
+    const store = TestBed.inject(BoardStore)
+    await store.load('b')
+
+    store.select(new Set(['p1']))
+    await store.removeSelected()
+    expect(removed).toEqual(['p1'])
+    expect(store.placements().map(p => p.id)).toEqual(['p2'])
+    expect(store.selectedCount()).toBe(0)
   })
 })

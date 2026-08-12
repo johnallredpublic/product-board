@@ -20,17 +20,22 @@
 // so they can grow unbounded without creating a hot partition on the board.
 //
 // ─── Item shapes ───────────────────────────────────────────────────────────
-//   Entity        PK              SK                    GSI1PK       GSI1SK
-//   Workspace     WS#<id>         #META
-//   Board pointer WS#<id>         BOARD#<id>
-//   Board         BOARD#<id>      #META
-//   Placement     BOARD#<id>      ITEM#<zzzz>#<id>      PROD#<pid>   BOARD#<id>
-//   Event         BOARD#<id>#EVT  EVT#<iso>#<id>
-//   Product       PROD#<id>       #META                 SEASON#<s>   STYLE#<style>
-//   Asset         PROD#<id>       ASSET#<id>
+//   Entity        PK                          SK                GSI1PK       GSI1SK
+//   Workspace     WS#<tenantId>               #META
+//   Board pointer WS#<tenantId>               BOARD#<id>
+//   Board         TENANT#<t>#BOARD#<id>       #META
+//   Placement     TENANT#<t>#BOARD#<id>[#S<n>] ITEM#<zzzz>#<id> PROD#<pid>  BOARD#<id>
+//   Member        TENANT#<t>#BOARD#<id>       MEMBER#<userId>
+//   Event         TENANT#<t>#BOARD#<id>#EVT   EVT#<iso>#<id>
+//   Product       PROD#<id>                   #META             SEASON#<s>  STYLE#<style>
+//   Asset         PROD#<id>                   ASSET#<id>
 //
-// z-order is a zero-padded integer (ITEM#0042#<uuid>) so string sort == draw order.
-// GSI1 is overloaded (pattern 5 + product-by-season browse); prefixes never collide.
+// The board aggregate is TENANT-SCOPED in the partition key (ADR 0020) so an IAM
+// dynamodb:LeadingKeys condition can enforce isolation at the AWS layer; all board
+// keys are built in ONE place (db/keys.ts). Products are not tenant-prefixed yet
+// (that path crosses into the media service). z-order is a zero-padded integer
+// (ITEM#0042#<uuid>) so string sort == draw order. GSI1 is overloaded (pattern 5 +
+// product-by-season browse); prefixes never collide.
 //
 // NOTE: the guide's Phase 3 Step 2 table co-locates events under BOARD#<id>;
 // ADR 0004 and Phase 8 supersede that with the separate BOARD#<id>#EVT partition

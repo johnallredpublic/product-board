@@ -39,3 +39,20 @@ export const AssetFailed = z.object({
   reason:    z.string(),
 })
 export type AssetFailed = z.infer<typeof AssetFailed>
+
+/**
+ * Emitted by the stream consumer (transactional outbox) when a product's price
+ * changes → consumed by notify. Like PlacementMoved, its dedup identity is the
+ * stream `eventId`, and `actorUserId` lets the notifier skip the editor themselves.
+ */
+export const ProductPriceChanged = z.object({
+  version:     z.literal(1),
+  productId:   z.string().uuid(),
+  tenantId:    z.string().optional(),
+  from:        z.number().int().nonnegative(),
+  to:          z.number().int().nonnegative(),
+  at:          z.string(),
+  eventId:     z.string(),
+  actorUserId: z.string().optional(),
+})
+export type ProductPriceChanged = z.infer<typeof ProductPriceChanged>

@@ -8,5 +8,9 @@ export default defineConfig({
     env: { LOCAL: '1', POWERTOOLS_LOG_LEVEL: 'SILENT' },
     testTimeout: 20_000,
     hookTimeout: 30_000,
+    // Integration tests share one DynamoDB Local + OpenSearch; run files
+    // sequentially so global operations (reconcile's table scan) don't race
+    // concurrent writers.
+    fileParallelism: false,
   },
 })

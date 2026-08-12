@@ -66,7 +66,7 @@ beforeAll(async () => {
   await ensureTable()
   await ensureBucket()
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-    PK: `PROD#${productId}`, SK: '#META',
+    PK: `PROD#${productId}`, SK: '#META', tenantId: 'dev-tenant',
     style: 'AB123', name: 'Runner', colorway: 'Black', priceCents: 12000, season: 'FA26', asset: null,
   }}))
   app = buildServer()

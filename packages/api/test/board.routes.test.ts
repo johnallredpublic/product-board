@@ -6,6 +6,7 @@ import {
 import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
 import { ddb, TABLE } from '../src/db/table.js'
+import { boardPk } from '../src/db/keys.js'
 import { buildServer } from '../src/server.js'
 
 // Integration test: drives the real Fastify app in-process (app.inject) against
@@ -66,7 +67,7 @@ beforeAll(async () => {
   await ensureTable()
 
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-    PK: `BOARD#${boardId}`, SK: '#META',
+    PK: boardPk('dev-tenant', boardId), SK: '#META', tenantId: 'dev-tenant',
     name: 'FA26 Line Review', season: 'FA26', createdAt: new Date().toISOString(),
   }}))
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
@@ -74,7 +75,7 @@ beforeAll(async () => {
     style: 'AB123', name: 'Runner', colorway: 'Black', priceCents: 12000, season: 'FA26', asset: null,
   }}))
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-    PK: `BOARD#${boardId}`, SK, productId,
+    PK: boardPk('dev-tenant', boardId), SK, productId,
     x: 0, y: 0, w: 100, h: 120, z: 1, version: 0,
   }}))
 
@@ -104,6 +105,15 @@ describe('GET /api/boards/:id', () => {
     const res = await app.inject({ method: 'GET', url: `/api/boards/${randomUUID()}` })
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe('not_found')
+  })
+
+  it('hides another tenant\'s board (BOLA): 404, not 403', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/boards/${boardId}`,
+      headers: { 'x-tenant-id': 'someone-else' }, // valid id, wrong tenant
+    })
+    expect(res.statusCode).toBe(404)
   })
 })
 

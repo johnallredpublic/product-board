@@ -13,6 +13,7 @@ import {
   aws_cloudwatch as cw,
   aws_apigatewayv2 as apigwv2,
   aws_logs as logs,
+  aws_opensearchservice as opensearch,
 } from 'aws-cdk-lib'
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import { Construct } from 'constructs'
@@ -57,10 +58,31 @@ export class CoreStack extends Stack {
       eventBridgeEnabled: true,
     })
 
+    // Catalog search read model (ADR 0017). The stream consumer indexes products
+    // into it; the API queries it. Small single-node domain — size up for real load.
+    //
+    // The managed domain is the one resource here that isn't free-tier, so it's
+    // optional: `SEARCH_ENABLED=false pnpm ... deploy` skips it and the API falls
+    // back to a DynamoDB-backed catalog (search/client.ts). Enabled by default.
+    const searchEnabled = process.env.SEARCH_ENABLED !== 'false'
+    const search = searchEnabled
+      ? new opensearch.Domain(this, 'Search', {
+          version: opensearch.EngineVersion.openSearch('2.17'),
+          capacity: { dataNodes: 1, dataNodeInstanceType: 't3.small.search' },
+          ebs: { volumeSize: 10 },
+          nodeToNodeEncryption: true,
+          encryptionAtRest: { enabled: true },
+          enforceHttps: true,
+          removalPolicy: RemovalPolicy.DESTROY,
+        })
+      : undefined
+
     const commonEnv = {
       TABLE_NAME: this.table.tableName,
       EVENT_BUS_NAME: this.bus.eventBusName,
       BUCKET_NAME: this.assetsBucket.bucketName,
+      SEARCH_ENABLED: String(searchEnabled),
+      ...(search ? { OPENSEARCH_ENDPOINT: `https://${search.domainEndpoint}` } : {}),
     }
     const nodeFn = (fnId: string, name: string, opts: Partial<lambda.FunctionProps> = {}) =>
       new lambda.Function(this, fnId, {
@@ -80,20 +102,31 @@ export class CoreStack extends Stack {
 
     // ─── API: Fastify on Lambda behind an HTTP API ────────────────────────────
     const apiFn = nodeFn('ApiFn', 'api', { timeout: Duration.seconds(29) })
+    // Auth verifies bearer tokens against the IdP's JWKS (ADR 0020). Pass the IdP
+    // config through when set; without JWKS_URI the API fails closed in prod.
+    for (const k of ['JWKS_URI', 'JWT_ISSUER', 'JWT_AUDIENCE'] as const) {
+      if (process.env[k]) apiFn.addEnvironment(k, process.env[k]!)
+    }
     this.table.grantReadWriteData(apiFn)
     this.bus.grantPutEventsTo(apiFn)
     this.assetsBucket.grantPut(apiFn) // presigned PUTs
+    search?.grantRead(apiFn) // catalog search (absent when search is disabled)
 
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       defaultIntegration: new HttpLambdaIntegration('ApiIntegration', apiFn),
     })
 
     // ─── Stream consumer + event source mapping + DLQ ─────────────────────────
+    // Bulkheads (ADR 0018 / DESIGN.md §6.3): each async consumer gets a reserved
+    // concurrency slice, so one tenant's bulk import can't starve the others (and no
+    // consumer can exhaust the account's pool). Per-tenant-tier queues are the next
+    // step for finer isolation.
     const streamDlq = new sqs.Queue(this, 'StreamDlq', { retentionPeriod: Duration.days(14) })
-    const streamFn = nodeFn('StreamFn', 'stream')
+    const streamFn = nodeFn('StreamFn', 'stream', { reservedConcurrentExecutions: 10 })
     this.table.grantStreamRead(streamFn)
     this.table.grantReadWriteData(streamFn)
     this.bus.grantPutEventsTo(streamFn)
+    search?.grantReadWrite(streamFn) // projects products into the search index (absent when disabled)
     streamFn.addEventSource(new sources.DynamoEventSource(this.table, {
       startingPosition: lambda.StartingPosition.TRIM_HORIZON,
       batchSize: 100,
@@ -111,7 +144,7 @@ export class CoreStack extends Stack {
       visibilityTimeout: Duration.seconds(180), // >= 6x the consumer timeout, or duplicates
       deadLetterQueue: { queue: notifyDlq, maxReceiveCount: 5 },
     })
-    const notifyFn = nodeFn('NotifyFn', 'notify')
+    const notifyFn = nodeFn('NotifyFn', 'notify', { reservedConcurrentExecutions: 10 })
     this.table.grantReadWriteData(notifyFn)
     notifyFn.addEventSource(new sources.SqsEventSource(notifyQueue, {
       batchSize: 10,
@@ -127,8 +160,17 @@ export class CoreStack extends Stack {
       targets: [new targets.SqsQueue(notifyQueue)],
     })
 
+    // ─── Apply media's AssetProcessed to the product (API owns products) ──────
+    const assetProcessedFn = nodeFn('AssetProcessedFn', 'asset-processed', { reservedConcurrentExecutions: 5 })
+    this.table.grantReadWriteData(assetProcessedFn)
+    new events.Rule(this, 'AssetProcessedRule', {
+      eventBus: this.bus,
+      eventPattern: { source: ['assortment.media'], detailType: ['AssetProcessed'] },
+      targets: [new targets.LambdaFunction(assetProcessedFn)],
+    })
+
     // ─── Reconciliation on a nightly schedule ─────────────────────────────────
-    const reconcileFn = nodeFn('ReconcileFn', 'reconcile', { timeout: Duration.minutes(5) })
+    const reconcileFn = nodeFn('ReconcileFn', 'reconcile', { timeout: Duration.minutes(5), reservedConcurrentExecutions: 2 })
     this.table.grantReadWriteData(reconcileFn)
     new events.Rule(this, 'ReconcileSchedule', {
       schedule: events.Schedule.cron({ hour: '3', minute: '0' }),

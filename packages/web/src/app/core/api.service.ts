@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core'
-import { HttpClient } from '@angular/common/http'
+import { HttpClient, HttpParams } from '@angular/common/http'
 import { firstValueFrom } from 'rxjs'
-import { BoardView, Board, BoardList } from '@assortment/shared'
+import { BoardView, Board, BoardList, Placement, CatalogResults, CatalogItem, Product, UpdateProduct } from '@assortment/shared'
 
 /** One placement move the client sends (matches the MovePlacements contract). */
 export interface MoveInput {
@@ -37,5 +37,31 @@ export class ApiService {
   async createBoard(input: { name: string; season: Board['season'] }): Promise<Board> {
     const raw = await firstValueFrom(this.http.post('/api/boards', input))
     return Board.parse(raw)
+  }
+
+  /** Add a product to a board; the server assigns id, z-order, and version. */
+  async addPlacement(boardId: string, input: { productId: string; x: number; y: number }): Promise<Placement> {
+    const raw = await firstValueFrom(this.http.post(`/api/boards/${boardId}/placements`, input))
+    return Placement.parse(raw)
+  }
+
+  /** Remove a placement from a board. */
+  async removePlacement(boardId: string, placementId: string): Promise<void> {
+    await firstValueFrom(this.http.delete(`/api/boards/${boardId}/placements/${placementId}`))
+  }
+
+  /** Catalog search — the products a user can drop onto a board. */
+  async searchCatalog(query: { q?: string; season?: string } = {}): Promise<CatalogItem[]> {
+    let params = new HttpParams()
+    if (query.q) params = params.set('q', query.q)
+    if (query.season) params = params.set('season', query.season)
+    const raw = await firstValueFrom(this.http.get('/api/catalog', { params }))
+    return CatalogResults.parse(raw).items
+  }
+
+  /** Edit a product (field-level merge). Returns the updated product. */
+  async updateProduct(id: string, patch: UpdateProduct): Promise<Product> {
+    const raw = await firstValueFrom(this.http.patch(`/api/products/${id}`, patch))
+    return Product.parse(raw)
   }
 }

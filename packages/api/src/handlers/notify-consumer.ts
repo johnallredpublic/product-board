@@ -3,6 +3,8 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { ddb, TABLE } from '../db/table.js'
 import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
 import { recordMetric, flushMetrics } from '../obs/observability.js'
+import { listBoardMembers } from '../db/members.js'
+import { boardsContainingProduct } from '../db/boards.js'
 
 export interface Notification { eventId: string; boardId: string; text: string }
 export interface Subscriber { userId: string }
@@ -20,6 +22,15 @@ function digestKey(userId: string, items: Notification[]): string {
 }
 
 function toNotification(detail: any): Notification {
+  // Two event shapes flow through this queue: a placement move (has boardId +
+  // placementId) and a product price change (has productId, no boardId).
+  if (detail?.productId && detail?.boardId == null) {
+    return {
+      eventId: String(detail.eventId),
+      boardId: '',
+      text: `Product ${String(detail.productId).slice(0, 8)} price changed to $${(Number(detail.to) / 100).toFixed(2)}`,
+    }
+  }
   return {
     eventId: String(detail.eventId),
     boardId: String(detail.boardId),
@@ -65,11 +76,47 @@ export function createNotifyHandler(deps: NotifyDeps) {
 
 // ─── Default wiring (used by the real Lambda in Phase 11) ─────────────────────
 
+/**
+ * A board's subscribers are its members (anyone who's loaded or edited it), minus
+ * the actor who caused the event — you don't get notified of your own move.
+ */
+export async function boardMemberSubscribers(detail: any): Promise<Subscriber[]> {
+  const tenantId = String(detail?.tenantId ?? '')
+  const boardId = String(detail?.boardId ?? '')
+  if (!tenantId || !boardId) return []
+  const members = await listBoardMembers(tenantId, boardId)
+  return members
+    .filter(userId => userId !== detail?.actorUserId)
+    .map(userId => ({ userId }))
+}
+
+/**
+ * A product event's subscribers are the members of every board the product sits on
+ * (access pattern 5 via GSI1), unioned and minus the actor. This is what "lights up"
+ * ProductPriceChanged — a price edit notifies everyone watching an affected board.
+ * The tenant rides in on the event so the (tenant-scoped) board keys can be built.
+ */
+export async function productSubscribers(detail: any): Promise<Subscriber[]> {
+  const tenantId = String(detail?.tenantId ?? '')
+  const productId = String(detail?.productId ?? '')
+  if (!tenantId || !productId) return []
+  const boardIds = await boardsContainingProduct(productId)
+  const memberLists = await Promise.all(boardIds.map(boardId => listBoardMembers(tenantId, boardId)))
+  const members = new Set(memberLists.flat())
+  return [...members]
+    .filter(userId => userId !== detail?.actorUserId)
+    .map(userId => ({ userId }))
+}
+
+/** Route an event to the right subscriber resolver by its shape. */
+export async function findSubscribers(detail: any): Promise<Subscriber[]> {
+  if (detail?.boardId) return boardMemberSubscribers(detail)
+  if (detail?.productId) return productSubscribers(detail)
+  return []
+}
+
 const defaultDeps: NotifyDeps = {
-  // A real subscriber model (board watchers) is Phase 13 design work.
-  async findSubscribers() {
-    return []
-  },
+  findSubscribers,
   async sendDigestOnce(userId, items, key) {
     try {
       // Idempotency guard: only the first attempt writes (and would "send").

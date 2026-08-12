@@ -1,7 +1,9 @@
+import type { EventBridgeEvent } from 'aws-lambda'
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import type { AssetProcessed, AssetRef } from '@assortment/shared'
+import { AssetProcessed, type AssetRef } from '@assortment/shared'
 import { ddb, TABLE } from '../db/table.js'
 import { assetUrl } from '../s3/client.js'
+import { runWithCorrelation, newCorrelationId } from '../obs/correlation.js'
 
 /**
  * Consumer of media's AssetProcessed event. The API owns product records, so THIS
@@ -28,4 +30,14 @@ export async function applyAssetProcessed(evt: AssetProcessed): Promise<void> {
     UpdateExpression: 'SET asset = :a',
     ExpressionAttributeValues: { ':a': asset },
   }))
+}
+
+/**
+ * Lambda entry: EventBridge (source assortment.media, detailType AssetProcessed)
+ * -> apply to the product. Binds the correlation id carried in the event detail.
+ */
+export async function handler(event: EventBridgeEvent<'AssetProcessed', unknown>): Promise<void> {
+  const detail = event.detail as Record<string, unknown>
+  const correlationId = (detail?.correlationId as string) ?? newCorrelationId()
+  await runWithCorrelation(correlationId, () => applyAssetProcessed(AssetProcessed.parse(detail)))
 }

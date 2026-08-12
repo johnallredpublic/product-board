@@ -59,6 +59,57 @@ export class BoardStore {
     this._selection.set(ids)
   }
 
+  /** Apply moves pushed from another client in real time (absolute positions). */
+  applyRemoteMoves(moves: { id: string; x: number; y: number; version: number }[]) {
+    const byId = new Map(moves.map(m => [m.id, m]))
+    this._placements.update(ps =>
+      ps.map(p => {
+        const m = byId.get(p.id)
+        return m ? { ...p, x: m.x, y: m.y, version: m.version } : p
+      }),
+    )
+  }
+
+  /** Add a catalog product to the board, persisting first so we get the real id. */
+  async addProduct(product: Product, x: number, y: number) {
+    const placement = await this.api.addPlacement(this.boardId(), { productId: product.id, x, y })
+    this.upsertProduct(product)
+    this._placements.update(ps => [...ps, placement])
+  }
+
+  /** Remove the current selection from the board (server, then local). */
+  async removeSelected() {
+    const ids = [...this._selection()]
+    if (ids.length === 0) return
+    const boardId = this.boardId()
+    await Promise.all(ids.map(id => this.api.removePlacement(boardId, id)))
+    const removing = new Set(ids)
+    this._placements.update(ps => ps.filter(p => !removing.has(p.id)))
+    this._selection.set(new Set())
+  }
+
+  /** Apply a placement another client added (product ships with it). */
+  applyRemoteAdd(placement: Placement, product?: Product) {
+    if (product) this.upsertProduct(product)
+    this._placements.update(ps =>
+      ps.some(p => p.id === placement.id) ? ps : [...ps, placement],
+    )
+  }
+
+  /** Apply a placement another client removed. */
+  applyRemoteRemove(placementId: string) {
+    this._placements.update(ps => ps.filter(p => p.id !== placementId))
+  }
+
+  private upsertProduct(product: Product) {
+    this._products.update(m => {
+      if (m.has(product.id)) return m
+      const next = new Map(m)
+      next.set(product.id, product)
+      return next
+    })
+  }
+
   /** Bump versions after a successful save, so the next write isn't stale. */
   bumpVersions(ids: Iterable<string>) {
     const set = new Set(ids)

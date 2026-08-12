@@ -11,24 +11,27 @@
 import { BatchWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
 import { ddb, TABLE } from '../src/db/table.js'
+import { boardPk, productPk } from '../src/db/keys.js'
 import { buildServer } from '../src/server.js'
 
 const N = Number(process.env.N ?? 200)
 const bid = randomUUID()
 const pad = (z: number) => String(z).padStart(4, '0')
 
+// The dev auth fallback resolves the benchmark's requests to this tenant.
+const TENANT = 'dev-tenant'
 const items: Record<string, any>[] = [
-  { PK: `BOARD#${bid}`, SK: '#META', name: 'Bench Board', season: 'FA26', createdAt: new Date().toISOString() },
+  { PK: boardPk(TENANT, bid), SK: '#META', tenantId: TENANT, name: 'Bench Board', season: 'FA26', createdAt: new Date().toISOString() },
 ]
 for (let i = 0; i < N; i++) {
   const pid = randomUUID()
   const plid = randomUUID()
   items.push({
-    PK: `PROD#${pid}`, SK: '#META', style: `S${i}`, name: `Product ${i}`,
+    PK: productPk(pid), SK: '#META', style: `S${i}`, name: `Product ${i}`,
     colorway: 'Black', priceCents: 1000 + i, season: 'FA26', asset: null,
   })
   items.push({
-    PK: `BOARD#${bid}`, SK: `ITEM#${pad(i)}#${plid}`, productId: pid,
+    PK: boardPk(TENANT, bid), SK: `ITEM#${pad(i)}#${plid}`, productId: pid,
     x: i * 10, y: i * 5, w: 100, h: 120, z: i, version: 0,
   })
 }
