@@ -1,6 +1,6 @@
 import { QueryCommand, BatchGetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
-import type { Board } from '@assortment/shared'
+import type { Board, ChangeEvent } from '@assortment/shared'
 import type { Placement, Product } from '@assortment/shared'
 import { ddb, TABLE } from './table.js'
 
@@ -55,6 +55,25 @@ export async function listBoards(workspaceId = WORKSPACE): Promise<Board[]> {
     name: i.name,
     season: i.season,
     createdAt: i.createdAt,
+  }))
+}
+
+/** Recent change events for a board, newest first (access pattern 7, Phase 8). */
+export async function getBoardEvents(boardId: string, limit = 50): Promise<ChangeEvent[]> {
+  const { Items = [] } = await ddb.send(new QueryCommand({
+    TableName: TABLE,
+    KeyConditionExpression: 'PK = :pk',
+    ExpressionAttributeValues: { ':pk': `BOARD#${boardId}#EVT` },
+    ScanIndexForward: false,
+    Limit: limit,
+  }))
+  return Items.map(i => ({
+    eventId: String(i.eventId),
+    type: i.type,
+    placementId: String(i.placementId),
+    before: i.before ?? null,
+    after: i.after ?? null,
+    at: String(i.at),
   }))
 }
 

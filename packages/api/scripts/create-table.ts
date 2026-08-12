@@ -58,6 +58,13 @@ await client.send(new CreateTableCommand({
     ],
     Projection: { ProjectionType: 'ALL' },
   }],
+  // Streams are the change log, produced atomically with each write — the
+  // transactional outbox for free (Phase 8). NEW_AND_OLD_IMAGES: change history
+  // needs the before and after.
+  StreamSpecification: {
+    StreamEnabled: true,
+    StreamViewType: 'NEW_AND_OLD_IMAGES',
+  },
 }))
 
 console.log(`created table "${TABLE}" with overloaded GSI1 (serves access patterns 5 + 6)`)

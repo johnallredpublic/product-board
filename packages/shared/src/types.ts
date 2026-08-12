@@ -91,3 +91,22 @@ export const BoardList = z.object({
   boards: z.array(Board),
 })
 export type BoardList = z.infer<typeof BoardList>
+
+const Point = z.object({ x: z.number(), y: z.number() })
+
+/** A placement change derived from the DynamoDB stream (Phase 8). */
+export const ChangeEvent = z.object({
+  eventId:     z.string(),
+  type:        z.enum(['INSERT', 'MODIFY', 'REMOVE']),
+  placementId: z.string(),
+  before:      Point.nullable(),
+  after:       Point.nullable(),
+  at:          z.string(),
+})
+export type ChangeEvent = z.infer<typeof ChangeEvent>
+
+/** What the board-events route returns (newest first). */
+export const BoardEvents = z.object({
+  items: z.array(ChangeEvent),
+})
+export type BoardEvents = z.infer<typeof BoardEvents>

@@ -3,8 +3,8 @@ import cors from '@fastify/cors'
 import { ZodError } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { BoardView, MovePlacements, UploadRequest, CreateBoardRequest } from '@assortment/shared'
-import { getBoardView, placementSkMap, createBoard, listBoards } from './db/boards.js'
+import { BoardView, MovePlacements, UploadRequest, CreateBoardRequest, BoardEvents } from '@assortment/shared'
+import { getBoardView, placementSkMap, createBoard, listBoards, getBoardEvents } from './db/boards.js'
 import { movePlacements, type Move } from './routes/placements.js'
 import { createAssetUpload } from './routes/assets.js'
 import { ConflictError } from './errors.js'
@@ -69,6 +69,10 @@ export function buildServer() {
       return reply.code(500).send({ error: { message: 'Response contract drift' } })
     }
     return out.data
+  })
+
+  app.get<{ Params: { id: string } }>('/api/boards/:id/events', async (req) => {
+    return BoardEvents.parse({ items: await getBoardEvents(req.params.id) })
   })
 
   app.patch<{ Params: { id: string } }>('/api/boards/:id/placements', async (req, reply) => {
