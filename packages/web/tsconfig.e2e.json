@@ -1,0 +1,10 @@
+/* Playwright E2E + config. Kept out of the app/spec projects; owns Node types so
+   process / node: imports resolve in the editor and CLI. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "moduleResolution": "bundler"
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}
