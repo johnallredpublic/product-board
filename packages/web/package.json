@@ -8,7 +8,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "test": "ng test"
+    "test": "ng test --watch=false --browsers=ChromeHeadless",
+    "e2e": "playwright test"
   },
   "prettier": {
     "printWidth": 100,
@@ -24,22 +25,23 @@
   },
   "private": true,
   "dependencies": {
-    "@assortment/shared": "workspace:*",
-    "zod": "^3.24.0",
     "@angular/common": "^20.3.0",
     "@angular/compiler": "^20.3.0",
     "@angular/core": "^20.3.0",
     "@angular/forms": "^20.3.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
+    "@assortment/shared": "workspace:*",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
+    "zod": "^3.24.0",
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
     "@angular/build": "^20.3.33",
     "@angular/cli": "^20.3.33",
     "@angular/compiler-cli": "^20.3.0",
+    "@playwright/test": "^1.62.1",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.9.0",
     "karma": "~6.4.0",
