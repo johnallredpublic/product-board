@@ -6,14 +6,17 @@ import {
 import {
   S3Client, CreateBucketCommand, HeadBucketCommand, HeadObjectCommand,
 } from '@aws-sdk/client-s3'
-import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
+import { PutCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
+import type { AssetUploadRequested } from '@assortment/shared'
 import { ddb, TABLE } from '../src/db/table.js'
 import { BUCKET } from '../src/s3/client.js'
 import { buildServer } from '../src/server.js'
+import { createAssetUpload } from '../src/routes/assets.js'
 
-// Integration test for the presigned-upload flow against DynamoDB Local + MinIO.
-// Requires `docker compose up -d`.
+// Integration test for the presigned-upload route against DynamoDB Local + MinIO.
+// After the media split, the API no longer writes the asset record — it emits
+// AssetUploadRequested (verified below) and hands back a presigned URL.
 
 const dynamo = new DynamoDBClient({
   endpoint: 'http://localhost:8000', region: 'local',
@@ -50,7 +53,7 @@ async function ensureTable() {
 
 async function ensureBucket() {
   try { await s3.send(new HeadBucketCommand({ Bucket: BUCKET })); return }
-  catch { /* not found — create below */ }
+  catch { /* create below */ }
   try { await s3.send(new CreateBucketCommand({ Bucket: BUCKET })) }
   catch (e: any) {
     if (!/BucketAlreadyOwnedByYou|BucketAlreadyExists/.test(e?.name ?? '')) {
@@ -73,41 +76,46 @@ beforeAll(async () => {
 afterAll(async () => { await app?.close() })
 
 describe('POST /api/products/:id/assets', () => {
-  it('records a pending asset and returns a presigned URL that accepts the upload', async () => {
+  it('returns a presigned URL that accepts the upload', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/api/products/${productId}/assets`,
-      payload: { contentType: 'image/png' },
+      method: 'POST', url: `/api/products/${productId}/assets`, payload: { contentType: 'image/png' },
     })
     expect(res.statusCode).toBe(200)
     const { assetId, uploadUrl } = res.json()
     expect(assetId).toBeTruthy()
     expect(uploadUrl).toContain('http://localhost:9000/')
 
-    // Intent recorded BEFORE upload, status pending.
-    const rec = (await ddb.send(new GetCommand({
-      TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: `ASSET#${assetId}` },
-    }))).Item
-    expect(rec?.status).toBe('pending')
-    expect(rec?.key).toBe(`products/${productId}/${assetId}/original`)
-
-    // Bytes go browser -> S3 directly via the presigned URL (Content-Type must match
-    // what was signed).
     const put = await fetch(uploadUrl, {
       method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: Buffer.from('fake-png-bytes'),
     })
     expect(put.status).toBe(200)
 
-    // Object is now in the bucket.
-    const head = await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: rec!.key }))
+    const head = await s3.send(new HeadObjectCommand({
+      Bucket: BUCKET, Key: `products/${productId}/${assetId}/original`,
+    }))
     expect(head.$metadata.httpStatusCode).toBe(200)
   })
 
   it('rejects an unsupported content type with 400 validation_failed', async () => {
     const res = await app.inject({
-      method: 'POST', url: `/api/products/${productId}/assets`,
-      payload: { contentType: 'image/gif' },
+      method: 'POST', url: `/api/products/${productId}/assets`, payload: { contentType: 'image/gif' },
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe('validation_failed')
+  })
+
+  it('emits AssetUploadRequested to media (and never writes the asset record itself)', async () => {
+    const emitted: { type: string; detail: any }[] = []
+    const { assetId } = await createAssetUpload(productId, 'image/png', async (type, detail) => {
+      emitted.push({ type, detail })
+    })
+
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]!.type).toBe('AssetUploadRequested')
+    const detail = emitted[0]!.detail as AssetUploadRequested
+    expect(detail.version).toBe(1)
+    expect(detail.assetId).toBe(assetId)
+    expect(detail.productId).toBe(productId)
+    expect(detail.key).toBe(`products/${productId}/${assetId}/original`)
   })
 })

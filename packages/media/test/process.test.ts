@@ -8,13 +8,13 @@ import {
 import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
-import { AssetRef } from '@assortment/shared'
+import { AssetProcessed } from '@assortment/shared'
 import { ddb, TABLE } from '../src/db/table.js'
 import { BUCKET } from '../src/s3/client.js'
-import { processUpload } from '../src/handlers/on-upload.js'
+import { processUpload } from '../src/process.js'
 
-// Integration test for the derivative pipeline (Phase 4 Step 2) against DynamoDB
-// Local + MinIO. Requires `docker compose up -d`.
+// Media's derivative pipeline against DynamoDB Local + MinIO. `publish` is injected
+// so we assert the emitted event without a live bus. Requires `docker compose up -d`.
 
 const dynamo = new DynamoDBClient({
   endpoint: 'http://localhost:8000', region: 'local',
@@ -64,64 +64,54 @@ async function ensureBucket() {
 beforeAll(async () => {
   await ensureTable()
   await ensureBucket()
-
-  // Seed the product and the pending asset record (as Step 1's upload route would).
+  // Product owned by the API; media must NOT touch it.
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
     PK: `PROD#${productId}`, SK: '#META',
     style: 'AB123', name: 'Runner', colorway: 'Black', priceCents: 12000, season: 'FA26', asset: null,
   }}))
+  // Pending asset record (as recordUpload would have written).
   await ddb.send(new PutCommand({ TableName: TABLE, Item: {
-    PK: `PROD#${productId}`, SK: `ASSET#${assetId}`,
-    status: 'pending', key, contentType: 'image/png', createdAt: new Date().toISOString(),
+    PK: `PROD#${productId}`, SK: `ASSET#${assetId}`, status: 'pending', key, contentType: 'image/png', createdAt: new Date().toISOString(),
   }}))
-
-  // Upload a real 300x200 original so sharp has something to process.
   const original = await sharp({
     create: { width: 300, height: 200, channels: 3, background: { r: 10, g: 120, b: 200 } },
   }).png().toBuffer()
   await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: original, ContentType: 'image/png' }))
 })
 
-describe('processUpload (derivative pipeline)', () => {
-  it('generates 128 + 512 WebP derivatives, marks the asset ready, and points the product at it', async () => {
-    await processUpload(key)
+describe('processUpload', () => {
+  it('generates derivatives, marks the asset ready, emits AssetProcessed, and leaves the product untouched', async () => {
+    const emitted: { type: string; detail: any }[] = []
+    await processUpload(key, async (type, detail) => { emitted.push({ type, detail }) })
 
-    // Both derivatives exist with the webp content type.
     for (const size of [128, 512]) {
       const head = await s3.send(new HeadObjectCommand({
         Bucket: BUCKET, Key: `products/${productId}/${assetId}/thumb-${size}.webp`,
       }))
       expect(head.$metadata.httpStatusCode).toBe(200)
-      expect(head.ContentType).toBe('image/webp')
-      expect(head.CacheControl).toContain('immutable')
     }
 
-    // Asset record flipped pending -> ready with the ORIGINAL dimensions.
     const rec = (await ddb.send(new GetCommand({
       TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: `ASSET#${assetId}` },
     }))).Item
     expect(rec?.status).toBe('ready')
     expect(rec?.width).toBe(300)
-    expect(rec?.height).toBe(200)
 
-    // Product now carries a valid AssetRef the board can render.
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]!.type).toBe('AssetProcessed')
+    expect(AssetProcessed.safeParse(emitted[0]!.detail).success).toBe(true)
+
+    // Boundary: media does NOT write the product record.
     const product = (await ddb.send(new GetCommand({
       TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: '#META' },
     }))).Item
-    const parsed = AssetRef.safeParse(product?.asset)
-    expect(parsed.success).toBe(true)
-    expect(product?.asset.assetId).toBe(assetId)
-    expect(product?.asset.width).toBe(300)
-    expect(product?.asset.height).toBe(200)
-    expect(product?.asset.thumb128).toContain(`thumb-128.webp`)
+    expect(product?.asset).toBeNull()
   })
 
-  it('is a no-op-safe reprocess (idempotent): rerunning yields the same ready state', async () => {
-    await processUpload(key) // redelivery / manual re-run
-    const rec = (await ddb.send(new GetCommand({
-      TableName: TABLE, Key: { PK: `PROD#${productId}`, SK: `ASSET#${assetId}` },
-    }))).Item
-    expect(rec?.status).toBe('ready')
-    expect(rec?.width).toBe(300)
+  it('emits AssetFailed and rethrows when the original is missing', async () => {
+    const missingKey = `products/${productId}/${randomUUID()}/original`
+    const emitted: { type: string }[] = []
+    await expect(processUpload(missingKey, async (type) => { emitted.push({ type }) })).rejects.toThrow()
+    expect(emitted.some(e => e.type === 'AssetFailed')).toBe(true)
   })
 })

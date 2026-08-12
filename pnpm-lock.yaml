@@ -49,9 +49,6 @@ importers:
       fastify:
         specifier: ^5.11.3
         version: 5.11.3
-      sharp:
-        specifier: ^0.35.3
-        version: 0.35.3(@types/node@22.20.1)
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -62,6 +59,46 @@ importers:
       '@types/aws-lambda':
         specifier: ^8.10.162
         version: 8.10.162
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(sass@1.90.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/media:
+    dependencies:
+      '@assortment/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@aws-sdk/client-dynamodb':
+        specifier: ^3.1107.0
+        version: 3.1107.0
+      '@aws-sdk/client-eventbridge':
+        specifier: ^3.1107.0
+        version: 3.1107.0
+      '@aws-sdk/client-s3':
+        specifier: ^3.1107.0
+        version: 3.1107.0
+      '@aws-sdk/lib-dynamodb':
+        specifier: ^3.1107.0
+        version: 3.1107.0(@aws-sdk/client-dynamodb@3.1107.0)
+      sharp:
+        specifier: ^0.35.3
+        version: 0.35.3(@types/node@22.20.1)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8.10.162
+        version: 8.10.162
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
@@ -6445,7 +6482,7 @@ snapshots:
       '@babel/parser': 7.29.8
       '@istanbuljs/schema': 0.1.6
       istanbul-lib-coverage: 3.2.2
-      semver: 7.7.2
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
 
@@ -6832,7 +6869,7 @@ snapshots:
     dependencies:
       hosted-git-info: 9.0.3
       proc-log: 5.0.0
-      semver: 7.7.2
+      semver: 7.8.5
       validate-npm-package-name: 6.0.2
 
   npm-packlist@10.0.4:
