@@ -1,0 +1,486 @@
+<title>Assortment at Scale</title>
+<style>
+  :root {
+    /* Light — cool architect's-document neutrals (slate-blue bias), petrol accent */
+    --ground: #F6F8FA;
+    --surface: #FFFFFF;
+    --ink: #1A2230;
+    --muted: #58637A;
+    --faint: #8892A6;
+    --hairline: #E3E7EE;
+    --accent: #0D6E78;      /* petrol */
+    --accent-soft: #E4F1F2;
+    --amber: #9A5A08;       /* tradeoff signal */
+    --amber-soft: #F6ECDD;
+    --grid-dot: rgba(26, 34, 48, 0.10);
+    --shadow: 0 1px 2px rgba(20,30,48,.04), 0 6px 22px rgba(20,30,48,.06);
+
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-body: "Iowan Old Style", "Palatino Linotype", Charter, Georgia, Cambria, serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0F141A;
+      --surface: #161C24;
+      --ink: #E7EBF2;
+      --muted: #9AA6BA;
+      --faint: #6C7889;
+      --hairline: #262F3B;
+      --accent: #46AEB8;
+      --accent-soft: #123138;
+      --amber: #D69A4E;
+      --amber-soft: #2A2113;
+      --grid-dot: rgba(231, 235, 242, 0.09);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0F141A;
+    --surface: #161C24;
+    --ink: #E7EBF2;
+    --muted: #9AA6BA;
+    --faint: #6C7889;
+    --hairline: #262F3B;
+    --accent: #46AEB8;
+    --accent-soft: #123138;
+    --amber: #D69A4E;
+    --amber-soft: #2A2113;
+    --grid-dot: rgba(231, 235, 242, 0.09);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ---- Hero ---- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(var(--grid-dot) 1.4px, transparent 1.4px);
+    background-size: 26px 26px;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 92%);
+            mask-image: linear-gradient(to bottom, #000 0%, transparent 92%);
+    pointer-events: none;
+  }
+  .hero-inner {
+    position: relative;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: clamp(3rem, 7vw, 5.5rem) clamp(1.25rem, 5vw, 3rem) clamp(2rem, 4vw, 3rem);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 680;
+    letter-spacing: -0.02em;
+    line-height: 1.02;
+    text-wrap: balance;
+    font-size: clamp(2.6rem, 7vw, 4.6rem);
+    margin: 0 0 1.1rem;
+  }
+  .scope {
+    max-width: 60ch;
+    color: var(--muted);
+    font-size: clamp(1.05rem, 2.2vw, 1.28rem);
+    margin: 0 0 2.4rem;
+  }
+  .scope b { color: var(--ink); font-weight: 600; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat { background: var(--surface); padding: 1.1rem 1.25rem; }
+  .stat .n {
+    font-family: var(--font-display);
+    font-weight: 660;
+    font-size: 1.7rem;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .l {
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-top: .35rem;
+  }
+
+  /* ---- Layout ---- */
+  .layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: clamp(2rem, 4vw, 3.5rem) clamp(1.25rem, 5vw, 3rem) 4rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+  @media (min-width: 940px) {
+    .layout { grid-template-columns: 220px minmax(0, 68ch); justify-content: center; gap: 3.5rem; align-items: start; }
+  }
+
+  /* ---- Contents rail ---- */
+  .toc { position: sticky; top: 1.5rem; align-self: start; display: none; }
+  @media (min-width: 940px) { .toc { display: block; } }
+  .toc h2 {
+    font-family: var(--font-mono);
+    font-size: .68rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--faint); margin: 0 0 .9rem; font-weight: 500;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .1rem; }
+  .toc a {
+    display: flex; gap: .6rem; align-items: baseline;
+    text-decoration: none; color: var(--muted);
+    font-family: var(--font-display); font-size: .9rem; line-height: 1.3;
+    padding: .38rem .5rem; border-radius: 7px;
+    border-left: 2px solid transparent;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  .toc a .num { font-family: var(--font-mono); font-size: .72rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .toc a:hover { color: var(--ink); background: var(--accent-soft); }
+  .toc a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+  .toc a.active .num { color: var(--accent); }
+
+  /* ---- Article ---- */
+  main { min-width: 0; }
+  section { scroll-margin-top: 1.5rem; }
+  section + section { margin-top: 3.2rem; padding-top: 3.2rem; border-top: 1px solid var(--hairline); }
+  .sec-head { display: flex; align-items: baseline; gap: .85rem; margin: 0 0 1.1rem; }
+  .sec-head .num {
+    font-family: var(--font-mono); font-size: .95rem; color: var(--accent);
+    font-variant-numeric: tabular-nums; padding-top: .2rem;
+  }
+  h2.sec {
+    font-family: var(--font-display); font-weight: 660; letter-spacing: -0.015em;
+    font-size: clamp(1.5rem, 3.4vw, 2rem); line-height: 1.1; margin: 0; text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--font-display); font-weight: 640; letter-spacing: -0.01em;
+    font-size: 1.16rem; margin: 2rem 0 .5rem;
+  }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent); }
+  strong { font-weight: 600; }
+  main ul { margin: 0 0 1rem; padding-left: 1.1rem; }
+  main li { margin-bottom: .5rem; }
+  main li::marker { color: var(--accent); }
+
+  .lead { font-size: 1.12rem; color: var(--muted); }
+  .lead b { color: var(--ink); font-weight: 600; }
+
+  /* eyebrow labels within body */
+  .label { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+
+  /* callouts encode the doc's real structure: decisions vs tradeoffs */
+  .call {
+    border: 1px solid var(--hairline);
+    border-left-width: 3px;
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+    margin: 1rem 0;
+    background: var(--surface);
+    font-size: .98rem;
+    box-shadow: var(--shadow);
+  }
+  .call .tag {
+    font-family: var(--font-mono); font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
+    display: inline-block; margin-bottom: .35rem;
+  }
+  .call.decision { border-left-color: var(--accent); }
+  .call.decision .tag { color: var(--accent); }
+  .call.tradeoff { border-left-color: var(--amber); background: var(--amber-soft); }
+  .call.tradeoff .tag { color: var(--amber); }
+  .call p:last-child { margin-bottom: 0; }
+
+  /* monospace data blocks: API contract, estimates */
+  .mono {
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    line-height: 1.7;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 1.1rem 1.2rem;
+    overflow-x: auto;
+    margin: 1rem 0 1.2rem;
+    box-shadow: var(--shadow);
+  }
+  .mono .c { color: var(--faint); }        /* comment / arrow note */
+  .mono .m { color: var(--accent); font-weight: 600; }  /* method */
+
+  /* estimate figures */
+  .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; margin: 1rem 0 1.2rem; }
+  .fig { background: var(--surface); padding: .95rem 1.05rem; }
+  .fig .n { font-family: var(--font-display); font-weight: 640; font-size: 1.25rem; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .fig .n small { font-weight: 500; font-size: .75rem; color: var(--muted); }
+  .fig .d { font-size: .82rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; }
+
+  code { font-family: var(--font-mono); font-size: .86em; background: var(--accent-soft); color: var(--ink); padding: .08em .38em; border-radius: 5px; }
+  .call code, .mono code { background: transparent; padding: 0; }
+
+  /* theme toggle */
+  .toggle {
+    position: fixed; top: 1rem; right: 1rem; z-index: 10;
+    font-family: var(--font-mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--hairline); border-radius: 999px;
+    padding: .45rem .8rem; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .toggle:hover { color: var(--ink); border-color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  footer {
+    max-width: 1100px; margin: 0 auto; padding: 2rem clamp(1.25rem,5vw,3rem) 4rem;
+    border-top: 1px solid var(--hairline); color: var(--faint);
+    font-family: var(--font-mono); font-size: .74rem; letter-spacing: .04em;
+  }
+  .hero-inner, .call, .fig, .stat, section { animation: rise .5s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+
+<button class="toggle" id="themeToggle" aria-label="Toggle color theme">◐ Theme</button>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">System Design · reference</p>
+    <h1>Assortment at&nbsp;Scale</h1>
+    <p class="scope">The version of Assortment for <b>500 tenants and 10,000 concurrent users</b> — deliberately <em>not</em> built yet. Today's single-region system is the starting point; this is where it goes when load justifies it. Every significant choice names its tradeoff, and the last section says what to defer.</p>
+    <div class="stats">
+      <div class="stat"><div class="n">500</div><div class="l">Tenants</div></div>
+      <div class="stat"><div class="n">10,000</div><div class="l">Concurrent users</div></div>
+      <div class="stat"><div class="n">99.9%</div><div class="l">Availability, 1 region</div></div>
+      <div class="stat"><div class="n">&lt;300<small>ms</small></div><div class="l">Board load p99</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#requirements"><span class="num">01</span><span>Requirements &amp; assumptions</span></a></li>
+      <li><a href="#estimates"><span class="num">02</span><span>Back-of-envelope</span></a></li>
+      <li><a href="#contract"><span class="num">03</span><span>API contract</span></a></li>
+      <li><a href="#architecture"><span class="num">04</span><span>Architecture &amp; request paths</span></a></li>
+      <li><a href="#tenancy"><span class="num">05</span><span>Multi-tenancy</span></a></li>
+      <li><a href="#hard"><span class="num">06</span><span>The hard problems</span></a></li>
+      <li><a href="#failure"><span class="num">07</span><span>Failure modes</span></a></li>
+      <li><a href="#ops"><span class="num">08</span><span>Operations</span></a></li>
+      <li><a href="#defer"><span class="num">09</span><span>What to defer</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="requirements">
+      <div class="sec-head"><span class="num">01</span><h2 class="sec">Requirements and assumptions</h2></div>
+      <p class="lead">A good design answer starts by stating what it's optimizing for — and what it's assuming.</p>
+
+      <h3>Functional</h3>
+      <ul>
+        <li>Tenants arrange products onto pan/zoom boards; positions persist.</li>
+        <li>Multiple users edit one board <strong>concurrently</strong> and see each other's moves in near-real-time.</li>
+        <li>Products carry images; uploads generate derivatives asynchronously.</li>
+        <li>Users browse and filter a catalog of thousands of products per tenant.</li>
+      </ul>
+
+      <h3>Non-functional — the numbers that drive decisions</h3>
+      <ul>
+        <li><strong>Scale:</strong> 500 tenants, 10,000 concurrent users, peaking during synchronized "line review" sessions (~50 people on one board at once).</li>
+        <li><strong>Latency:</strong> board load <strong>p99 &lt; 300&nbsp;ms</strong>; a peer's move visible <strong>p95 &lt; 500&nbsp;ms</strong>; derivatives ready <strong>&lt; 30&nbsp;s</strong> (async, tolerant).</li>
+        <li><strong>Availability:</strong> <strong>99.9%</strong> single-region — not 99.99% (see §9).</li>
+        <li><strong>Consistency:</strong> a board's placements are read-your-writes within a session (optimistic locking). Summaries, feeds, and search are eventually consistent, and the UI says so honestly.</li>
+        <li><strong>Durability:</strong> never lose a placement; a lost <em>thumbnail</em> is recoverable.</li>
+      </ul>
+
+      <h3>Assumptions, stated out loud</h3>
+      <ul>
+        <li>Read-heavy: board loads and browsing dominate; writes spike only in line reviews.</li>
+        <li>Tenants are mutually distrusting — isolation is a hard requirement, not a feature.</li>
+        <li>Images are the bulk of storage; records are tiny.</li>
+        <li>One AWS region is acceptable at launch; residency/multi-region is a later, customer-driven ask.</li>
+      </ul>
+    </section>
+
+    <section id="estimates">
+      <div class="sec-head"><span class="num">02</span><h2 class="sec">Back-of-envelope</h2></div>
+      <p class="lead">Estimate only what changes a decision.</p>
+      <div class="figs">
+        <div class="fig"><div class="n">~3M <small>items</small></div><div class="d">500 × 20 boards × 300 placements ≈ 600&nbsp;MB. Volume isn't the constraint.</div></div>
+        <div class="fig"><div class="n">~5 TB</div><div class="d">2.5M products × (~2&nbsp;MB original + derivatives). CloudFront is mandatory.</div></div>
+        <div class="fig"><div class="n">~500 <small>writes/s</small></div><div class="d">Debounced moves, bursty at peak. On-demand absorbs it.</div></div>
+        <div class="fig"><div class="n">~10k <small>msg/s</small></div><div class="d">Real-time fan-out to peers. <em>This</em> is the scaling story, not the DB.</div></div>
+      </div>
+      <p>Access patterns and hot partitions constrain this system — not data volume. One <strong>hot tenant at 50k products</strong> is the outlier that shapes the catalog design (§6.3), and holding <strong>10k concurrent WebSocket connections</strong> open is the outlier that shapes real-time (§6.1).</p>
+    </section>
+
+    <section id="contract">
+      <div class="sec-head"><span class="num">03</span><h2 class="sec">The API contract</h2></div>
+      <p class="lead">For a platform, the interface <b>is</b> the product.</p>
+      <p>REST for request/response, WebSocket for live updates. Contracts are Zod schemas in a shared package, versioned; consumers are tolerant readers. Tenant is <strong>never</strong> a request parameter — it comes from the auth token (§5).</p>
+      <div class="mono">
+<span class="m">GET</span>   /api/boards                  <span class="c">→ boards in the caller's tenant</span>
+<span class="m">POST</span>  /api/boards                  <span class="c">→ create board</span>
+<span class="m">GET</span>   /api/boards/:id              <span class="c">→ BoardView: board + placements + products, 1 round trip</span>
+<span class="m">PATCH</span> /api/boards/:id/placements   <span class="c">→ batched moves, optimistic-locked (409 on conflict)</span>
+<span class="m">GET</span>   /api/boards/:id/events       <span class="c">→ activity feed, newest first</span>
+<span class="m">POST</span>  /api/products/:id/assets     <span class="c">→ presigned upload (bytes go browser→S3)</span>
+<span class="m">GET</span>   /api/catalog?filter=...      <span class="c">→ search / filter (OpenSearch-backed)</span>
+
+<span class="m">WS</span>    /realtime  (subscribe boardId)  <span class="c">→ PlacementMoved, PlacementAdded, …</span>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="sec-head"><span class="num">04</span><h2 class="sec">Architecture &amp; the primary request paths</h2></div>
+      <p>Same shape as today, scaled: CloudFront (static app + <code>/api/*</code>), API on Lambda behind an HTTP API, single-table DynamoDB with Streams, EventBridge, the media service — plus, new at this scale, an <strong>API Gateway WebSocket</strong> tier, a <strong>connection registry</strong>, and an <strong>OpenSearch</strong> read model.</p>
+
+      <h3>Board load — <code>GET /api/boards/:id</code></h3>
+      <p>One Query returns the board <code>#META</code> plus its placements (the item collection as a precomputed join); a <code>BatchGet</code> then hydrates products. p99 &lt; 300&nbsp;ms — measured at 77&nbsp;ms for 200 placements locally.</p>
+
+      <h3>Tile move — the real-time path</h3>
+      <p>Client moves optimistically → debounced <code>PATCH</code> → conditional <code>TransactWrite</code> (optimistic lock) → the <strong>DynamoDB Stream</strong> emits the change → the stream consumer writes the change-event (transactional outbox) and publishes <code>PlacementMoved</code> to EventBridge → a <strong>fan-out Lambda</strong> pushes to each peer's WebSocket. The mover already sees their own change; peers see it p95 &lt; 500&nbsp;ms later.</p>
+
+      <h3>Image upload</h3>
+      <p><code>POST …/assets</code> returns a presigned URL and emits <code>AssetUploadRequested</code>; media records the pending asset, processes on <code>ObjectCreated</code>, emits <code>AssetProcessed</code>; the API applies it to the product. Fully async — the board renders placeholders until derivatives land.</p>
+    </section>
+
+    <section id="tenancy">
+      <div class="sec-head"><span class="num">05</span><h2 class="sec">Multi-tenancy</h2></div>
+      <div class="call decision"><span class="tag">Decision</span><p><strong>Pooled, not siloed.</strong> One table, tenant encoded in the partition key (<code>TENANT#&lt;t&gt;#BOARD#&lt;id&gt;</code>). A table or stack per tenant is rejected at 500 tenants — it multiplies operational surface and deploy risk by tenant count for isolation a scoped key already gives.</p></div>
+      <p><strong>Isolation, defense in depth:</strong></p>
+      <ul>
+        <li><strong>Tenant comes from the token, never the request.</strong> The <code>tenantId</code> claim is injected server-side into every key; a client can't ask for another tenant's board because it can't name the partition.</li>
+        <li>This is the <strong>BOLA</strong> class (Broken Object Level Authorization) — the most common API vulnerability. No code path lets a URL id select a partition on its own.</li>
+        <li><strong>IAM session policies</strong> as a second layer: handlers assume a short-lived role with a <code>dynamodb:LeadingKeys</code> condition pinned to the tenant, so even a logic bug can't cross tenants at the AWS level.</li>
+      </ul>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>Every query must carry the tenant prefix; a forgotten prefix is a bug class — so it's centralized in one key-builder module and covered by tests.</p></div>
+    </section>
+
+    <section id="hard">
+      <div class="sec-head"><span class="num">06</span><h2 class="sec">The hard problems</h2></div>
+      <p class="lead">A decision and a tradeoff for each.</p>
+
+      <h3>6.1 · Real-time collaboration</h3>
+      <div class="call decision"><span class="tag">Decision</span><p>API Gateway <strong>WebSocket</strong> + a <strong>connection registry</strong> in DynamoDB (<code>CONN#&lt;boardId&gt;</code> items with a TTL so dead connections self-evict). On <code>PlacementMoved</code>, a fan-out Lambda posts to each connection. Reconnect: the client re-fetches the board, then resubscribes — the socket carries deltas, not truth.</p></div>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>Fan-out is O(viewers) per write; a 200-viewer board is a hot fan-out. Mitigate by batching deltas per board per ~100&nbsp;ms and sharding fan-out by connection range. OT/CRDT sync is unnecessary while LWW positions are acceptable.</p></div>
+
+      <h3>6.2 · Concurrent editing</h3>
+      <div class="call decision"><span class="tag">Decision</span><p>Keep <strong>optimistic locking with last-write-wins</strong> for positions (already built). Same-tile collision: one wins, the loser's client reloads. For non-positional fields (name, price), <strong>field-level merge</strong>.</p></div>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>LWW can lose an in-flight drag on a rare same-tile collision — cheap and correct enough for spatial arrangement. CRDTs would make every edit mergeable but add real client/server complexity; unjustified until customers report conflict pain.</p></div>
+
+      <h3>6.3 · Hot tenants and hot partitions</h3>
+      <div class="call decision"><span class="tag">Decision</span><p>The <strong>bulkhead pattern</strong> — isolate blast radius by tier: separate SQS queues and <strong>reserved Lambda concurrency</strong> per tenant tier, so one tenant's bulk import can't starve others. For the 50k-product tenant: paginated catalog via GSI, and <strong>write-sharding</strong> a hot board's partition if it exceeds a partition's throughput.</p></div>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>Sharding complicates reads (scatter-gather) and is only worth it for proven hotspots — apply per-board, by evidence, not everywhere.</p></div>
+
+      <h3>6.4 · Search and filtering</h3>
+      <div class="call decision"><span class="tag">Decision</span><p><strong>OpenSearch fed by DynamoDB Streams.</strong> Twenty arbitrary filter combinations is not a key-value access pattern; forcing it into DynamoDB means scans or a GSI per filter. Streams project products into an index; the catalog route queries OpenSearch.</p></div>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>A second datastore to operate, and eventual consistency — a just-edited product may lag in search by seconds. Acceptable for browse; DynamoDB stays authoritative.</p></div>
+
+      <h3>6.5 · Image delivery at scale</h3>
+      <div class="call decision"><span class="tag">Decision</span><p><strong>CloudFront</strong> over the S3 derivatives, <strong>immutable</strong> caching (the key contains a UUID, so content never changes), origin shield to collapse origin fetches. Private-tenant assets use signed URLs.</p></div>
+      <div class="call tradeoff"><span class="tag">Tradeoff</span><p>Cache invalidation is a non-issue by design, but per-tenant signed delivery adds URL-signing on the read path — batch-sign at board load.</p></div>
+    </section>
+
+    <section id="failure">
+      <div class="sec-head"><span class="num">07</span><h2 class="sec">Failure modes</h2></div>
+      <p class="lead">What breaks first, and the blast radius.</p>
+      <ul>
+        <li><strong>A viral board</strong> overwhelms fan-out before the DB → back-pressure deltas, shard fan-out, degrade to interval-poll if the socket tier saturates.</li>
+        <li><strong>DynamoDB hot partition</strong> on one board's writes → write-sharding; meanwhile throttles return 429 and the client's debounce retries.</li>
+        <li><strong>OpenSearch falls behind</strong> the stream → search is stale, browse still works, the DB remains authoritative; alarm on iterator age.</li>
+        <li><strong>Media outage</strong> → uploads still succeed, boards render placeholders, images appear on recovery (graceful degradation). DLQ + alarm.</li>
+        <li><strong>Bad deploy</strong> → bounded by canary/gradual Lambda deploys with automatic rollback; a media bug can't take down boards.</li>
+        <li><strong>Consumer breaks for a day</strong> → reconciliation rebuilds the drifted read models without replaying an expired stream.</li>
+      </ul>
+    </section>
+
+    <section id="ops">
+      <div class="sec-head"><span class="num">08</span><h2 class="sec">Operations</h2></div>
+      <ul>
+        <li><strong>Deploy:</strong> CDK, two stacks (core + media), gradual traffic shifting with alarm-based rollback. Same-origin via CloudFront — no CORS, first-party cookies.</li>
+        <li><strong>Capacity:</strong> DynamoDB on-demand at launch; switch hot tables to provisioned + autoscaling once traffic is predictable, for cost.</li>
+        <li><strong>Migrations:</strong> single-table is rigid — additive attributes are free; new access patterns need a new GSI or a Streams-driven backfill. Never big-bang.</li>
+        <li><strong>Monitoring:</strong> DLQ depth &gt; 0, stream iterator age, API 5xx / p99, DynamoDB throttles, reconciliation discrepancy count, connection count and fan-out latency. Alert on symptoms ("board load failing"), not causes ("CPU high"). Correlation IDs cross every async hop.</li>
+        <li><strong>On-call:</strong> runbooks keyed to each alarm; the DLQ is the first place to look.</li>
+      </ul>
+    </section>
+
+    <section id="defer">
+      <div class="sec-head"><span class="num">09</span><h2 class="sec">What to defer, and why</h2></div>
+      <p class="lead">Right-sizing is the senior signal. Naming the exit ramps matters more than building them.</p>
+      <ul>
+        <li><strong>Multi-region active-active.</strong> 99.9% in one region meets the target; active-active triples cost and forces conflict resolution on global writes. Revisit when a contract demands 99.99% or data residency.</li>
+        <li><strong>CRDTs / OT.</strong> LWW positions are acceptable; adopt only if real conflict pain appears.</li>
+        <li><strong>Per-tenant tables.</strong> Only for a regulated customer needing physical isolation; pooled keys + IAM cover the rest.</li>
+        <li><strong>A service mesh / more splits.</strong> Two services is the right number; more would be a distributed monolith. Split further only on evidence of divergent scaling or ownership.</li>
+        <li><strong>GraphQL / a BFF.</strong> REST + WebSocket is sufficient; add aggregation only if client round-trips become a measured problem.</li>
+      </ul>
+      <p>Proposing global active-active and CRDTs for a fifty-person company is enthusiasm, not judgment. This design scales to the stated numbers and names where to change course when they change.</p>
+    </section>
+  </main>
+</div>
+
+<footer>Assortment · system design reference · derived from docs/DESIGN.md · pairs with ADR&nbsp;0003 (canvas) and ADR&nbsp;0012 (service split)</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themeToggle');
+    function current() {
+      var s = root.getAttribute('data-theme');
+      if (s) return s;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+    });
+
+    // Scroll-spy for the contents rail
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          var a = map[e.target.id];
+          if (a) a.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    document.querySelectorAll('main section').forEach(function (s) { obs.observe(s); });
+  })();
+</script>
