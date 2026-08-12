@@ -13,6 +13,7 @@
     "sweep:assets": "LOCAL=1 tsx scripts/sweep-assets.ts",
     "seed:demo": "LOCAL=1 tsx scripts/seed-demo.ts",
     "stream:consume": "LOCAL=1 tsx scripts/stream-poll.ts",
+    "reconcile:run": "LOCAL=1 tsx scripts/reconcile.ts",
     "bench": "LOCAL=1 tsx scripts/benchmark.ts"
   },
   "dependencies": {
