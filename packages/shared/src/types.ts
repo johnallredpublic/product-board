@@ -78,3 +78,16 @@ export const UploadResponse = z.object({
   uploadUrl: z.string().url(),
 })
 export type UploadResponse = z.infer<typeof UploadResponse>
+
+/** Body for creating a board. */
+export const CreateBoardRequest = z.object({
+  name:   z.string().min(1).max(200),
+  season: Product.shape.season,
+})
+export type CreateBoardRequest = z.infer<typeof CreateBoardRequest>
+
+/** What the list-boards route returns. */
+export const BoardList = z.object({
+  boards: z.array(Board),
+})
+export type BoardList = z.infer<typeof BoardList>

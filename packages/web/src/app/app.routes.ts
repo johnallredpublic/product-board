@@ -1,3 +1,17 @@
 import { Routes } from '@angular/router';
+import { BoardStore } from './board/board-store';
 
-export const routes: Routes = [];
+export const routes: Routes = [
+  { path: '', redirectTo: 'boards', pathMatch: 'full' },
+  {
+    path: 'boards',
+    loadComponent: () =>
+      import('./boards/board-list.component').then((m) => m.BoardListComponent),
+  },
+  {
+    path: 'boards/:boardId',
+    providers: [BoardStore], // scoped to this route: one store per board
+    loadComponent: () =>
+      import('./board/board-page.component').then((m) => m.BoardPageComponent),
+  },
+];

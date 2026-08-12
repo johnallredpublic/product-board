@@ -11,6 +11,7 @@
     "db:reset": "tsx scripts/create-table.ts --recreate",
     "s3:create": "tsx scripts/create-bucket.ts",
     "sweep:assets": "LOCAL=1 tsx scripts/sweep-assets.ts",
+    "seed:demo": "LOCAL=1 tsx scripts/seed-demo.ts",
     "bench": "LOCAL=1 tsx scripts/benchmark.ts"
   },
   "dependencies": {

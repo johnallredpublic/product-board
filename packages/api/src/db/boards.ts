@@ -1,9 +1,62 @@
-import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb'
-import type { Board, Placement, Product } from '@assortment/shared'
+import { QueryCommand, BatchGetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
+import { randomUUID } from 'node:crypto'
+import type { Board } from '@assortment/shared'
+import type { Placement, Product } from '@assortment/shared'
 import { ddb, TABLE } from './table.js'
 
 /** A raw DynamoDB item: generic keys (PK/SK/GSI…) plus domain attributes. */
 type Item = Record<string, any>
+
+// No tenancy yet: a single default workspace holds all boards (access pattern 2).
+// Multi-tenancy (tenant in the PK, from the token) is Phase 13 design work.
+const WORKSPACE = process.env.WORKSPACE_ID ?? 'default'
+
+/**
+ * Create a board. Writes the board's #META item AND a workspace pointer atomically
+ * (TransactWrite) so the board and its listing entry can never disagree. The
+ * pointer carries denormalized name/season/createdAt so listBoards is one Query
+ * with no follow-up hydration.
+ */
+export async function createBoard(input: { name: string; season: Board['season'] }): Promise<Board> {
+  const id = randomUUID()
+  const createdAt = new Date().toISOString()
+  const summary = { name: input.name, season: input.season, createdAt }
+
+  await ddb.send(new TransactWriteCommand({
+    TransactItems: [
+      {
+        Put: {
+          TableName: TABLE,
+          Item: { PK: `BOARD#${id}`, SK: '#META', ...summary },
+          ConditionExpression: 'attribute_not_exists(PK)',
+        },
+      },
+      {
+        Put: {
+          TableName: TABLE,
+          Item: { PK: `WS#${WORKSPACE}`, SK: `BOARD#${id}`, ...summary },
+        },
+      },
+    ],
+  }))
+
+  return { id, ...summary }
+}
+
+/** List boards in a workspace (access pattern 2): one Query over the pointers. */
+export async function listBoards(workspaceId = WORKSPACE): Promise<Board[]> {
+  const { Items = [] } = await ddb.send(new QueryCommand({
+    TableName: TABLE,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+    ExpressionAttributeValues: { ':pk': `WS#${workspaceId}`, ':b': 'BOARD#' },
+  }))
+  return Items.map(i => ({
+    id: String(i.SK).replace('BOARD#', ''),
+    name: i.name,
+    season: i.season,
+    createdAt: i.createdAt,
+  }))
+}
 
 export async function getBoardView(boardId: string) {
   // One query gets metadata AND placements: #META sorts before ITEM#

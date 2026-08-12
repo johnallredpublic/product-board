@@ -3,8 +3,8 @@ import cors from '@fastify/cors'
 import { ZodError } from 'zod'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { BoardView, MovePlacements, UploadRequest } from '@assortment/shared'
-import { getBoardView, placementSkMap } from './db/boards.js'
+import { BoardView, MovePlacements, UploadRequest, CreateBoardRequest } from '@assortment/shared'
+import { getBoardView, placementSkMap, createBoard, listBoards } from './db/boards.js'
 import { movePlacements, type Move } from './routes/placements.js'
 import { createAssetUpload } from './routes/assets.js'
 import { ConflictError } from './errors.js'
@@ -40,6 +40,16 @@ export function buildServer() {
     return reply.code(500).send({
       error: { message: 'Internal Server Error' },
     })
+  })
+
+  app.get('/api/boards', async () => {
+    return { boards: await listBoards() }
+  })
+
+  app.post('/api/boards', async (req, reply) => {
+    const input = CreateBoardRequest.parse(req.body)
+    const board = await createBoard(input)
+    return reply.code(201).send(board)
   })
 
   app.get<{ Params: { id: string } }>('/api/boards/:id', async (req, reply) => {
