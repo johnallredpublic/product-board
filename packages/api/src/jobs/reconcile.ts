@@ -84,3 +84,8 @@ export async function reconcileBoardSummaries(): Promise<Discrepancy[]> {
 
   return discrepancies
 }
+
+/** Lambda entry point for the nightly EventBridge schedule (Phase 15). */
+export async function handler(): Promise<void> {
+  await reconcileBoardSummaries()
+}

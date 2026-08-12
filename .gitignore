@@ -147,3 +147,7 @@ packages/web/e2e/board.json
 packages/web/test-results/
 packages/web/playwright-report/
 packages/web/blob-report/
+
+# CDK
+infra/cdk.out/
+infra/dist/

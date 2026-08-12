@@ -27,6 +27,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1107.0",
     "@aws-sdk/s3-request-presigner": "^3.1107.0",
     "@aws-sdk/util-dynamodb": "^3.996.7",
+    "@fastify/aws-lambda": "^6.4.1",
     "@fastify/cors": "^11.3.0",
     "fastify": "^5.11.3",
     "zod": "^3.25.76"

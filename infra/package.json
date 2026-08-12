@@ -2,7 +2,20 @@
   "name": "@assortment/infra",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "bundle": "node bundle.mjs",
+    "synth": "pnpm bundle && cdk synth",
+    "deploy": "pnpm bundle && cdk deploy --all",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "aws-cdk": "^2.170.0",
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.12",
+    "typescript": "~5.9.2"
   }
 }
