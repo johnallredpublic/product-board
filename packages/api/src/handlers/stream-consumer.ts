@@ -4,6 +4,7 @@ import type {
 import { unmarshall } from '@aws-sdk/util-dynamodb'
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { ddb, TABLE } from '../db/table.js'
+import { publishDomainEvent } from '../events/bus.js'
 
 // ─── The transactional outbox, for free ──────────────────────────────────────
 // The stream IS the change log, produced atomically with each write — so there's
@@ -48,13 +49,25 @@ export async function processRecord(record: DynamoDBRecord): Promise<void> {
   const secs = record.dynamodb?.ApproximateCreationDateTime
   const at = secs ? new Date(secs * 1000).toISOString() : ''
 
+  const placementId = sk.split('#')[2] ?? ''
+  const before = oldImage ? { x: Number(oldImage.x), y: Number(oldImage.y) } : null
+  const after = newImage ? { x: Number(newImage.x), y: Number(newImage.y) } : null
+
   await writeChangeEvent(boardId, eventId, at, {
     type: record.eventName as 'INSERT' | 'MODIFY' | 'REMOVE',
-    placementId: sk.split('#')[2] ?? '',
-    before: oldImage ? { x: Number(oldImage.x), y: Number(oldImage.y) } : null,
-    after: newImage ? { x: Number(newImage.x), y: Number(newImage.y) } : null,
+    placementId,
+    before,
+    after,
     at: at || new Date().toISOString(),
   })
+
+  // Emit a domain event for moves. No-ops locally without a bus (Phase 11 wires it).
+  if (record.eventName === 'MODIFY') {
+    await publishDomainEvent('PlacementMoved', {
+      version: 1, boardId, placementId, from: before, to: after,
+      at: at || new Date().toISOString(), eventId,
+    })
+  }
 
   await updateBoardSummary(boardId)
 }

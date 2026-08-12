@@ -110,3 +110,20 @@ export const BoardEvents = z.object({
   items: z.array(ChangeEvent),
 })
 export type BoardEvents = z.infer<typeof BoardEvents>
+
+/**
+ * A DOMAIN event (a statement about the business), distinct from the raw DynamoDB
+ * change record. Published to EventBridge (Phase 9); consumers depend on this
+ * shape, not the table's. The `version` literal makes it a versioned contract
+ * (Phase 10): additive changes are safe, anything else needs a new version.
+ */
+export const PlacementMoved = z.object({
+  version:     z.literal(1),
+  boardId:     z.string(),
+  placementId: z.string(),
+  from:        Point.nullable(),
+  to:          Point.nullable(),
+  at:          z.string(),
+  eventId:     z.string(),
+})
+export type PlacementMoved = z.infer<typeof PlacementMoved>

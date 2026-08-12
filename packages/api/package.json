@@ -19,6 +19,7 @@
     "@assortment/shared": "workspace:*",
     "@aws-sdk/client-dynamodb": "^3.1107.0",
     "@aws-sdk/client-dynamodb-streams": "^3.1107.0",
+    "@aws-sdk/client-eventbridge": "^3.1107.0",
     "@aws-sdk/client-s3": "^3.1107.0",
     "@aws-sdk/lib-dynamodb": "^3.1107.0",
     "@aws-sdk/s3-request-presigner": "^3.1107.0",

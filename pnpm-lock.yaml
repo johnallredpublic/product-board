@@ -28,6 +28,9 @@ importers:
       '@aws-sdk/client-dynamodb-streams':
         specifier: ^3.1107.0
         version: 3.1107.0
+      '@aws-sdk/client-eventbridge':
+        specifier: ^3.1107.0
+        version: 3.1107.0
       '@aws-sdk/client-s3':
         specifier: ^3.1107.0
         version: 3.1107.0
@@ -349,6 +352,10 @@ packages:
 
   '@aws-sdk/client-dynamodb@3.1107.0':
     resolution: {integrity: sha512-MEo8N0ZtvNEQdiovlrUJdvUMfQTkDP98eOkRqSbY98p5/GTpBoENOzAa1G3bjfOs+lcEck80+0U7HuGSeErwZg==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-eventbridge@3.1107.0':
+    resolution: {integrity: sha512-192KH/2op7N04qwjKFPxNNi+EJd5gCfJmDwoIQ/HfxZO5C84RuJs6sWkIa79704KmVEbBG41FQQXTru6Qgi6sg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-s3@3.1107.0':
@@ -4127,6 +4134,18 @@ snapshots:
       '@aws-sdk/credential-provider-node': 3.972.78
       '@aws-sdk/dynamodb-codec': 3.973.41
       '@aws-sdk/middleware-endpoint-discovery': 3.972.27
+      '@aws-sdk/types': 3.974.2
+      '@smithy/core': 3.31.1
+      '@smithy/fetch-http-handler': 5.6.13
+      '@smithy/node-http-handler': 4.9.13
+      '@smithy/types': 4.16.1
+      tslib: 2.8.1
+
+  '@aws-sdk/client-eventbridge@3.1107.0':
+    dependencies:
+      '@aws-sdk/core': 3.977.6
+      '@aws-sdk/credential-provider-node': 3.972.78
+      '@aws-sdk/signature-v4-multi-region': 3.996.43
       '@aws-sdk/types': 3.974.2
       '@smithy/core': 3.31.1
       '@smithy/fetch-http-handler': 5.6.13
